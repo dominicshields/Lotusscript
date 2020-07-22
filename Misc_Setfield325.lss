@@ -1,0 +1,3680 @@
+Option Public
+Option Declare
+Const SETFIELDVER$ = "Misc Setfield V3.25 13/09/2017"
+Const LOOKUP$ = "lookup.nsf"
+Const LOOKUPVIEWALIAS$ = "D1"
+Const LOOKUPKEY$ = "MISCSETFIELD"
+Const BROWSERPATH$ =  "C:\Program Files\Internet Explorer\IEXPLORE.EXE"
+Const TEXTEDITORPATH$ = "NOTEPAD.EXE"
+Const HTTPS$ = "https://"
+Const NOTES$ = "notes://"
+Const VIEWLINK$ = "VIEW"
+Const DBLINK$ = "DB"
+Const ONSDOMAIN$ = "domapp001.ons.statistics.gov.uk"       ' Updated V3.08 10/04/2015
+Const ARIAL$ = "Arial"
+Const TIMESNR$ = "Times New Roman"
+Const FS1$ = "9"
+Const FS2$ = "12"
+Const BC$ = "#CCCCCC"    ' Grey
+Const AUTHORSCOL$ = "#99FF33"  ' Pale Green
+Const READERSCOL$ = "#FFFF00"    ' Yellow
+Const NAMESCOL$ = "#00FFFF"    ' Pale Blue
+Const PROHIBITCOL$ = "#99FF33"  ' Pale Green
+Const RTMAXLEN% = 500                                                                                               ' V3.16
+Const RTLIMITSPIEL$ = " . . . (Only showing first " & RTMAXLEN% & " chars)"     ' V3.16
+Const NOVAL$ = "~ NO VALUE ASSIGNED ~"                                                            ' V3.16
+Dim ws As NotesUIWorkspace
+Dim sess As NotesSession
+Dim db As NotesDatabase
+Dim lookupdb As NotesDatabase
+Dim lookupview As NotesView
+Dim view As NotesView
+Dim uiview As NotesUIView                         ' V3.02 change agent properties to act on None
+Dim dc As NotesDocumentCollection
+Dim popup As NotesDocument
+Dim lookupdoc As NotesDocument
+Dim uidoc As NotesUIDocument
+Dim agent As NotesAgent
+Dim rtitem As NotesRichTextItem
+Dim item As NotesItem
+Dim sourceitem As NotesItem
+
+Dim formitems() As String
+Dim formitemsexp() As String
+Dim bareformitems() As String
+Dim formvals() As String
+Dim formitemtypes() As String
+Dim prohibit() As String
+Dim changelog() As String
+Dim agentlist() As String
+Dim exist As String
+Dim prohibitmess As String
+Dim filenamexls As String
+Dim fieldname As String
+Dim fieldtype As String
+Dim listtype As String
+Dim newfieldname As String
+Dim source As String
+Dim target As String
+Dim rename As String
+Dim tempitem As String
+Dim tempval As String
+Dim tempitemtype As String
+Dim tempbareformitems As String
+Dim itemdesc As String
+Dim targetserver As String
+Dim targetdbpath As String
+Dim filename As String
+Dim tempdir As String
+Dim mydate As String
+Dim mytime As String
+Dim Inshold As String
+Dim sorttype As String
+Dim holdvalue As String
+
+Dim prohibitcnt As Long
+Dim t As Long
+Dim m As Long
+Dim v As Long
+Dim x As Long
+Dim y As Long
+Dim z As Long
+Dim sortcounter As Long
+Dim updcnt As Long
+Dim choice As Long
+Dim itemtype As Long
+Dim fieldvalueint As Long
+
+Dim tempdbl() As Double
+Dim fieldvaluefp As Double
+
+Dim fieldvalue As Variant
+Dim selval As Variant
+Dim SortedArray As Variant
+Dim heapsortvar As Variant
+Dim wsObject As Variant
+Dim fr_retval As Variant
+Dim cursel As Variant
+Dim valvar As Variant
+Dim retval As Variant
+Dim datevar As Variant
+Dim filenamevar As Variant
+
+Dim removeprohibit As Boolean
+Declare Private Function W32GetActiveWindow Lib "user32" Alias "GetActiveWindow" ( ) As Long
+Declare Private Function W32OpenClipboard Lib "user32" Alias "OpenClipboard" (ByVal hWnd As Long) As Long
+Declare Private Function W32CloseClipboard Lib "user32" Alias "CloseClipboard" ( ) As Long
+Declare Private Function W32EmptyClipboard Lib "user32" Alias "EmptyClipboard" ( ) As Long
+Declare Private Function W32GetClipboardData Lib "user32" Alias "GetClipboardData" (ByVal wFormat As Long) As Long
+Declare Private Function W32SetClipboardData Lib "user32" Alias "SetClipboardData" (ByVal wFormat As Long, ByVal hMem As Long) As Long
+Declare Private Function W32IsClipboardFormatAvailable Lib "user32" Alias "IsClipboardFormatAvailable" ( ByVal wFormat As Long) As Long
+Declare Private Function W32GlobalLock Lib "kernel32" Alias "GlobalLock" (ByVal hMem As Long) As Long
+Declare Private Function W32GlobalUnlock Lib "kernel32" Alias "GlobalUnlock" (ByVal hMem As Long) As Long
+Declare Private Function W32GlobalAllocate Lib "kernel32" Alias "GlobalAlloc" (ByVal wFlags As Long, ByVal dwBytes As Long) As Long
+Declare Private Function W32WriteMemoryToString Lib "kernel32" Alias "lstrcpyA" (ByVal lpString1 As String, ByVal lpString2 As Any) As Long
+Declare Private Function W32WriteStringToMemory Lib "kernel32" Alias "lstrcpyA" (ByVal lpString1 As Long, ByVal lpString2 As String) As Long
+Sub Initialize
+	'To roll-out the changes to all current templates use Agent A. MSF_Copy
+	'Misc Setfield Changelog
+	ReDim changelog(40)          ' Global
+	changelog(40) = "V3.25 13/09/2017 - Changes to List Design funcrionality - count form fields"
+	changelog(39) = "V3.24 24/04/2017 - Incremental code improvements such as DBQueryAccess Function, New sorting algorithm"
+	changelog(38) = "V3.23 05/04/2017 - Export and Import Private Views using DXL"
+	changelog(37) = "V3.22 03/11/2016 - Change case"
+	changelog(36) = "V3.21 12/04/2016 - Fixed zero-divide bug with Copy Docs to other DB"
+	changelog(35) = "V3.20 26/02/2016 - Tidy up of some issues caused by changing the rollout approach"
+	changelog(34) = "V3.19 10/02/2016 - Inherit from template idea, removed the version in the name, exempt BDB option in MSF_Copy and added Copy ACL Roles"
+	changelog(33) = "V3.18 18/01/2016 - Compare two documents, some code rationalisation and consistency changes V018 of MSF Template"
+	changelog(32) = "V3.17 06/01/2016 - Copy View and DB URL, Run background Agent , more improvements to RT Field handling & Release Native Notes Lock V017 of MSF Template"
+	changelog(31) = "V3.16 22/12/2015 - Sign Document, Copy Documents, improved RT Field handling V016 of MSF Template"
+	changelog(30) = "V3.15 01/10/2015 - Sorting changes, Added Heapsort, changed Quicksort and Insertion Sort, improved Dominic Spy V015 of MSF Template"
+	changelog(29) = "V3.14 29/08/2015 - Changed nearly all integers to long data type to raise limit on selected documents from 32767. V014 of MSF Template"
+	changelog(28) = "V3.13 20/08/2015 - Delete Document ACL check override facility, Correct BDB Version (experimental) V013 of MSF Template"
+	changelog(27) = "V3.12 31/07/2015 - Added Delete Document which bypasses various deletion prevention methods. V012 of MSF Template"
+	changelog(26) = "V3.11 30/07/2015 - Took limitations off Release Notes Lock, added remove EDRMS Declaration, added changelog display, added Find/Replace Substring. Fixed delete field bug. V011 of MSF Template"
+	changelog(25) = "V3.10 18/06/2015 - Improved copy profile doc and release native notes lock V010 of MSF Template"
+	changelog(24) = "V3.09 15/05/2015 - Improved set integer to cope with Long values V008 of MSF Template"
+	changelog(23) = "V3.08 21/04/2014 - Fixed Copy URL, added Copy Profile - V007 of MSF Template"
+	changelog(22) = "V3.07 05/03/2015 - Copy URL to clipboard, Makeresponse - This is V006 of MSF Template"
+	changelog(21) = "V3.06 13/02/2015 - RemoveERMS list expanded to cope with new fields found."
+	changelog(20) = "V3.05 03/02/2015 - Various bugfixes mainly to do with conflicts between ui and not ui"
+	changelog(19) = "V3.04 26/01/2015 - Revised selection again to avoid the annoying ticking of one doc"
+	changelog(18) = "V3.03 15/01/2015 - Added removeerms, fixed bug about working on uidoc"
+	changelog(17) = "V3.02 13/01/2015 - Worked out how to have the agent work on No docs selected, _popup renamed to _msfpopup"
+	changelog(16) = "V3.01 10/01/2015 - Create Document option added and changed the aliases of the field 'exist' to deal with logical issues"
+	changelog(15) = "V3.00 22/12/2014 - Changed the selection method in the popup form to combobox to give more room, reinstated remove Notes lock. added unique, sort and trim text type arrays, rename field, delete profile"
+	changelog(14) = "V2.94 21/11/2014 - Changed the code quite considerably to allow back-end display and update of profile documents, new copy button. Refinement to copy button on 01/12/2014."
+	changelog(13) = "V2.93 01/05/2014 - Added a find/replace feature replacing the release Notes Lock"
+	changelog(12) = "V2.92 12/03/2014 - Found serious bug when changing type to text - the code is in sub checktype suitably commented - subsequently found a minor bug in findprohibit fixed on 05/04/2014, not versioned but rolled out."
+	changelog(11) = "V2.91 12/02/2014 - Coding rationalisation in particular the main Select Case, Added release Native Notes Lock"
+	changelog(10) = "V2.9 20/01/2014 - Added Display Notes.ini and Export to Excel"
+	changelog(9) = "V2.8 10/01/2014 - Added Edit Profiles feature"
+	changelog(8) = "V2.7 23/12/2013 - Reordered radio buttons, Added floating point option to setting/appending/new values, bugfixes, analyse forms"
+	changelog(7) = "V2.63 18/12/2013 - Added list design elements"
+	changelog(6) = "V2.62 11/12/2013 - Added Find prohibit refresh"
+	changelog(5) = "V2.61 16/11/2013 - Small change to Dominic Spy feature, not worth a rollout"
+	changelog(4) = "V2.6 16/10/2013 - Domino Spy type feature added"
+	changelog(3) = "V2.5 22/08/2013 - Fixed the bugs with append of numbers and dates including multi-value"
+	changelog(2) = "V2.4 13/08/2013 - Improvements to CopyACL"
+	changelog(1) = "V2.3 23/11/2012	- Added CopyACL. SEE DECLARATIONS FOR CONSTANTS"
+	changelog(0) = "V2.2 Security feature added where it looks up the D1 Keyword values view of lookup.nsf for a key of 'MISCSETFIELD'"
+
+	Dim doc As NotesDocument
+	Set ws = New NotesUIWorkspace
+	Set sess = New NotesSession
+	Set db = sess.currentdatabase
+'%REM FOR OPENNTF Comment out my security feature that prevents unauthorised usage within my organisation
+	If security = "NO" Then  ' ACCESS CHECK WITHIN ONS
+		Exit Sub
+	End If
+'%END REM
+
+	Set uiview = ws.Currentview                     ' V3.02 change agent properties to act on None
+	If Not uiview Is Nothing Then           ' V3.03
+		Set view = uiview.view                   ' V3.07
+		Set dc = uiview.Documents                      ' V3.02 change agent properties to act on None
+		updcnt = 0
+		If dc.count > 0 Then                                   ' V3.02 change agent properties to act on None
+			Set doc = dc.getfirstdocument
+		Else                                                               ' V3.02 change agent properties to act on None
+			Set dc = db.Unprocesseddocuments
+			If dc.count > 0 Then
+				Set doc = dc.getfirstdocument           ' V3.04
+			Else
+				Set doc = New NotesDocument(db)  ' V3.02 change agent properties to act on None
+				doc.nodocselected = "Running in no document selected mode"      ' V3.02 change agent properties to act on None
+			End If
+		End If                                                             ' V3.02 change agent properties to act on None
+	Else
+		Set doc = ws.Currentdocument.Document  ' V3.03
+	End If
+
+' The main block of code that populates the popup and controls the operations moved to this new sub mainlogic
+' so that the contents can be replaced if required V2.94 DJS 21/11/2014
+
+	Set popup = New NotesDocument(db)  ' Put back here V3.05
+	Call A_MainLogic(doc)    ' GO HERE FIRST TO SEE PROGRAM STRUCTURE
+
+	DeSelect      ' V3.16
+
+	If exist <> "" Then
+		If exist < "A" Then
+			Print Time$ & " : " & SETFIELDVER & " Agent ended OK, updated " & CStr(updcnt) & " documents. Field " & fieldname & "  Datatype " & fieldtype & " Action " & exist
+		End If
+	End If
+
+End Sub
+Sub NotesIni
+	Dim dummy As Long
+	Dim eval As Variant
+	Dim retval As Variant
+	Dim inidoc As New NotesDocument(db)
+	eval = Evaluate(|@ConfigFile|, inidoc)
+	dummy = Shell(TEXTEDITORPATH & " " & eval(0),1)
+	Print Time$ & " : " & SETFIELDVER & " Agent Ends OK, Notes.ini opened"
+End Sub
+Sub DeleteDocument(doc As NotesDocument)
+' V3.12 31/07/2015
+	Dim deldoc As NotesDocument
+	Dim uidocdel As NotesUIDocument
+	Dim unid As String
+	Dim iChoice As Long
+	Dim docselected As Long
+
+retry:
+'	If Not dbdeleteaccess Then     ' prior to V3.24 - questionable reliability
+	If Not (DBQueryAccess And DBACL_DELETE_DOCUMENTS) > 0 Then   ' V3.24 - see function DBQueryAccess for calling details
+		'   3 		Abort 		IDABORT
+		'	4 		Retry 		IDRETRY
+		'	5 		Ignore 	IDIGNORE
+		iChoice = MessageBox ("Testing the ACL suggests that you do not have Delete access on this database ACL", 18, "ACL Test " & SETFIELDVER)
+		Select Case iChoice
+		Case 3 : Print Time$ & " : " & SETFIELDVER & " Exiting"
+			Exit Sub
+		Case 4 : Print Time$ & " : " & SETFIELDVER & " Retrying"
+		 	GoTo retry
+		Case 5 : Print Time$ & " : " & SETFIELDVER & " Ignoring"
+		End Select
+	End If
+
+	If dc Is Nothing Then
+		docselected = 1
+	Else
+		docselected = dc.count
+	End If
+
+	Choice = MessageBox ("Continuing will delete the " & CStr(docselected) & " selected document(s), is this OK", 36,  "Confirmation of deletion " & SETFIELDVER)
+	If(choice = 7) Then
+		MessageBox "Aborting As Requested",16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+
+	If dc Is Nothing Then
+		Dim wsdel As New NotesUIWorkspace
+		Set uidocdel = wsdel.currentdocument
+		If Not uidocdel Is Nothing Then  ' Deleting the backend open doc is tricky so here goes
+			unid = doc.Universalid
+			Call uidocdel.close
+			Delete doc
+			Set deldoc = db.Getdocumentbyunid(unid)
+			Call deldoc.RemovePermanently(True)
+			Call wsdel.Viewrefresh()
+		Else
+			Call doc.RemovePermanently(True)
+		End If
+	Else
+		Call dc.Removeall(True)
+	End If
+
+	Print Time$ & " : " & SETFIELDVER & " Deleted " & CStr(docselected) & " document(s) from " & db.Title
+
+End Sub
+Sub A_MainLogic(doc As NotesDocument)
+	Dim dccount As Long
+	
+	Call A_InitVariables(doc)    ' V3.18 Get the form items and corresponding values  
+	
+	popup.formitems = formitems
+	popup.formvals = formvals
+	popup.chooser = ""
+	popup.selval = ""
+	popup.newfieldname = ""
+	popup.newval = ""
+	popup.fieldtype = "Text"
+	popup.listtype = "Single"
+	popup.exist = "Replace Value(s)"
+	popup.target = ""
+	popup.rename = ""
+	popup.targetdbpath = ""
+	popup.targetserver = ""   ' Noticed missing V3.08 when adding copyprofile
+	popup.targetserverbackend = "" ' V3.10
+	' ADDED EXPORT FIELDS
+	popup.formitemsexp = formitems
+	popup.chooserexp = ""
+	popup.chosen = ""
+	popup.delimeter = ","
+	tempdir=Environ("Temp")
+	If tempdir="" Then
+		tempdir=Environ("Tmp")
+		If tempdir=""  Then
+			MessageBox "No 'TEMP'-directory in your environment"
+			tempdir = "H:\ndata"
+		End If
+	End If
+
+	mydate = Format$( Date$ , "yyyymmdd" )
+	mytime = Format$( Time$ , "hhnn" )
+	filename = tempdir & "\" & db.title & "_export_" & mydate & "_" & mytime & ".csv"
+	filenamexls  = tempdir & "\" & db.title & "_export_" & mydate & "_" & mytime & ".xls"
+	popup.filename = filename
+	filenamevar = Evaluate(|@ReplaceSubstring( filename ; " " ; "_" )|,popup)
+	filenamevar = Evaluate(|@ReplaceSubstring( filename ; "\\" ; "_" )|,popup)
+	filenamevar = Evaluate(|@ReplaceSubstring( filename ; "/" ; "_" )|,popup)
+	popup.filename = filenamevar(0)
+
+	If dc Is Nothing Then   ' V2.94 21/11/2014
+		dccount = 1
+	Else
+		dccount = dc.count
+	End If
+
+	retval = ws.DialogBox("msfpopup", True, True, False, False, False, False, SETFIELDVER & " : Choose the field and new value or action : " & CStr(dccount) & " documents selected",popup)
+
+	If Not retval Then
+		Print Time$ & " : " & SETFIELDVER & " Cancel Pressed, exiting"     ' Changed V2.7 DJS 23/12/2013
+		Exit Sub
+	End If
+
+	fieldvalue = popup.newval
+	If(Len(popup.chooser(0)) > 0) Then
+		fieldname = Left(popup.chooser(0),InStr(popup.chooser(0)," ") - 1)
+	End If
+	newfieldname = popup.newfieldname(0)
+	fieldtype = popup.fieldtype(0)
+	listtype = popup.listtype(0)
+	exist = popup.exist(0)
+	selval = popup.selval
+	target = popup.target(0)
+	rename = popup.rename(0)
+	targetdbpath = popup.targetdbpath(0)
+	targetserver = popup.targetserverbackend(0)     ' Solving a problem V3.10
+	If(Len(popup.source(0)) > 0) Then
+		source = Left(popup.source(0),InStr(popup.source(0)," ") - 1)
+		target = Left(popup.target(0),InStr(popup.target(0)," ") - 1)
+	End If
+
+	If(fieldname = "" And fieldvalue(0) = "" And newfieldname = "" And fieldtype <> "5" And target = "" And targetdbpath = "" And exist <> "B") Then
+		MessageBox "Nothing Returned",16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+
+	If(fieldtype = "Integer (Long)" And fieldvalue(0) <> "") Then
+		fieldvalueint = CLng(fieldvalue(0))  ' NOT DEALING WITH FLOAT ETC
+	Else
+		If(fieldtype = "Floating Point" And fieldvalue(0) <> "") Then
+			fieldvaluefp = CDbl(fieldvalue(0))
+		End If
+	End If
+
+	Select Case exist
+		Case "1" :		' REPLACE VALUES
+			Call ReplaceVals(doc)
+
+		Case "2" :		' APPEND VALUES
+			Call AppendVals(doc)
+
+		Case "3" :		' NEW FIELD
+			Call NewField(doc)
+
+		Case "4" :		' DELETE FIELD
+			Call DeleteField(doc)
+
+		Case "5"			' CHANGE FIELD TYPE
+			Call ChangeFieldType(doc)
+
+		Case "6"			' SET ONE FIELD TO ANOTHER
+			Call SetFieldToAnother(doc)
+
+		Case "7"			' REMOVE ERMS DECLARATION V3.03 15/01/2015, List updated V3.09+
+			Call RemoveObsoleteERMS(doc)
+
+		Case "8"        ' MAKE ONE DOC A RESPONSE TO ANOTHER V3.07
+			Call makeresponse(doc)
+
+		Case "9"			' REMOVE EDRMS DECLARATION V3.11 24/07/2015
+			Call RemoveEDRMS(doc)
+
+		Case "10"      ' RELEASE NATIVE NOTES LOCK - Moved into the numerical range at V3.11
+			Call ReleaseNotesLock(doc) ' Reinstated at V3.00 Made Multi-doc at V3.11
+
+		Case "11"     ' FIND/REPLACE SUBSTRING V3.11
+			Call findreplacesubstring(doc)
+
+		Case "12"     ' DELETE DOCUMENT V3.12
+			Call deletedocument(doc)
+
+		Case "13"     ' FIX BDB VERSION ISSUE V3.13
+			Call fixbdbdocversion(doc)
+			
+		Case "14"     ' SIGN  DOCUMENT V3.16
+			Call signdocument(doc)
+			
+		Case "15"  ' To Lower Case V3.22
+			Call ChangeCase(doc,"LOWER")
+			
+		Case "16"  ' To Upper Case V3.22
+			Call ChangeCase(doc,"UPPER")
+			
+		Case "18"     ' FIND/REPLACE - replaces a matching multi-value array element with another value - not a substring that is find_replace_substring - Reinstated in V3.14
+			Call findreplace(doc)
+
+		Case "19"   ' RENAME FIELD
+			Call renamefield(doc) '  V3.00
+
+		Case "20"   ' SORT TEXT FIELD
+			Call sorttextfield(doc) '  V3.00
+
+		Case "21"   ' TRIM TEXT FIELD
+			Call trimtextfield(doc) '  V3.00
+
+		Case "22"   ' UNIQUE  TEXT FIELD
+			Call uniquetextfield(doc) '  V3.00
+
+		Case "23"   ' CREATE DOCUMENT
+			If Not uiview Is Nothing Then
+				Call UIView.DeselectAll
+				Call createdocument '  V3.00
+			End If
+
+' The actions that (mainly) don't act on a document selection have been relabelled as letters to make the
+' print statement code at the end of initialize summarising what was done easier
+
+		Case "A"  		' REFRESH ALL FIELDS - be aware this might change the docs in unintended ways
+			Call RefreshAll(doc)
+
+		Case "B" 			' COPY ACL
+			Call copyacl(targetserver,targetdbpath)
+
+		Case "C" 			' DOMINIC SPY - show all fields/types/values in a browser - only works on one document regardless of collection
+			Call dominicspy( doc, bareformitems, formvals, formitemtypes)
+
+		Case "D"  		' FIND PROHIBIT REFRESH DESIGN ELEMENTS
+			Call findprohibit(False,True)   ' Set param 1  to True if we ever allow removal - new form option though
+
+		Case "E"  		' LIST DESIGN
+			Call designelements
+
+		Case "F"  		' ANALYSE FORMS
+			Call analyseforms
+
+		Case "G"		' EDIT PROFILES
+			If Not uiview Is Nothing Then
+				Call UIView.DeselectAll
+			End If
+			Call editprofiles
+
+		Case "H"   ' DELETE PROFILE DOC
+			If Not uiview Is Nothing Then
+				Call UIView.DeselectAll
+			End If
+			Call deleteprofile      '  V3.00
+
+		Case "I" '	' EXPORT SELECTED DOCS TO EXCEL
+			Call export(popup)
+
+		Case "J" 		' DISPLAY NOTES.INI
+			Call notesini
+
+		Case "L"   ' Copy field to clipboard
+			Call CopyVals(doc)
+
+		Case "M"  ' Copy URL to clipboard   V3.07
+			Call CopyURL(doc)
+
+		Case "N"  ' Copy Profile document to another database V3.08
+			Call copyprofile
+
+		Case "O"  ' Display changelog
+			Call changelogdisplay
+			
+		Case "P" 			' COPY DOCUMENTS V3.16
+			Call copydocs(targetserver,targetdbpath,doc)
+			
+		Case "Q"       ' RUN AGENT V3.17
+			Call runagent
+			
+		Case "R"       ' COPY DB URL TO CLIPBOARD V3.17
+			Call CopyDBURL(DBLINK$)
+
+		Case "S"       ' COPY View URL TO CLIPBOARD V3.17
+			Call CopyDBURL(VIEWLINK$)
+		
+		Case "T"     ' Compare 2 documents V3.18
+			Call CompareDocs(doc)
+			
+		Case "U" 			' COPY ACL ROLES   V3.19
+			Call CopyRoles(targetserver,targetdbpath)
+			
+		Case "V"           ' EXPORT VIEW DESIGN TO DXL  V3.23
+			Call ExportViewDXL
+
+		Case "W"           ' IMPORT VIEW DESIGN FROM DXL  V3.23
+			Call ImportViewDXL
+			
+	End Select
+
+End Sub
+
+
+
+Public Function QuickSort(sArray As Variant, sortorder As String)
+	Dim sA() As String
+	Dim j As Long
+	Dim bottom As Long
+	Dim top As Long
+	bottom = LBound ( sArray )
+	top = UBound ( sArray )
+	ReDim sA( bottom To top ) As String
+	For j = bottom To top
+		sA ( j ) = sArray ( j )
+	Next
+     ' DoQS does a QuickSort if the Sublist is longer than 10 elements
+     ' Thus, when DoQS finishes, all elements are within 10 spots of their correct location.
+     ' For lists that are close to being in order, an Insertion Sort is much faster than a QuickSort, so we
+     ' run through the whole thing once doing an Insertion Sort to finish tidying up the order.
+	Call QuickSortMain( sA, bottom, top )
+	Call InsertionSort ( sA, sortorder )
+	SortedArray = sA
+End Function
+Sub HeapSiftUp(pavIn As Variant, piStart As Integer, piEnd As Integer)
+' Used to sort DESC
+	Dim liRoot As Integer
+	dim liChild As Integer
+	Dim lvTemp As Variant
+	liRoot = piStart
+	While liRoot *2 + 1 <= piEnd
+		liChild = liRoot *2 + 1
+		If liChild +1 <= piEnd Then     ' You cannot combine this test and the next one on the same line as if this is false you will error testing the next line DJS
+			If pavIn(liChild) > pavIn(liChild + 1) Then
+				liChild = liChild + 1
+			End If
+		End If
+		If pavIn(liRoot) > pavIn(liChild) Then
+			lvTemp = pavIn(liRoot)
+			pavIn(liRoot) = pavIn(liChild)
+			pavIn(liChild) = lvTemp
+			liRoot = liChild
+		Else
+			Exit Sub
+		End If
+	Wend
+End Sub
+Function DBDeleteAccess As Boolean ' V3.12
+' Evaluating @Useraccess seems to produce quite unreliable results until I happened to run it twice in the same code with different parameters, very strange
+'   The Full call is @UserAccess(server:path) with no params which returns
+'   [AccessLevel] : [CreateDocuments] : [DeleteDocuments] : [CreatePersonalAgents] : [CreatePersonalFoldersAndViews] : [CreateSharedFoldersAndViews] : [CreateLotusScriptJavaAgents] : [ReadPublicDocuments] : [WritePublicDocuments]
+'   Text Values  6; 1; 1; 1; 1; 1; 1; 1; 1 assuming Manager with every permission, delete docs is return val position 3 array subscript 2 because it starts at zero
+	Dim accstring As String
+	Dim i As Long
+	Dim Result As Variant
+	Dim testdeletiondoc As New NotesDocument(db)
+
+	dbdeleteaccess = False
+	testdeletiondoc.server = db.Server
+	testdeletiondoc.path = db.FilePath
+
+	Result=Evaluate("@UserAccess(server:path)",testdeletiondoc)
+	For i = LBound(result) To UBound(result)
+		accstring = accstring & "  " & CStr(i) & " = " & result(i) & " ; "
+	Next
+	Print Time$ & " : " & SETFIELDVER &  " Current user access to " & db.title & " is "  & accstring
+
+	Result=Evaluate("@UserAccess(server:path; [DELETEDOCUMENTS] )",testdeletiondoc)
+
+	Print Time$ & " : " & SETFIELDVER &  " Current user delete access to " & db.title & " is "  & result(0) & " (where 0 is no delete access, 1 is delete access)"
+
+	If(Result(0) = "1") Then          ' USER HAS DELETE ACCESS TO CURRENT DB
+		dbdeleteaccess = True
+	End If
+End Function
+
+
+Sub SetFieldToAnother(doc As NotesDocument)
+	fieldname = target       ' V3.00 this is to give a meaningful print message at the termination of the code
+	While Not doc Is Nothing
+		Set sourceitem = doc.getfirstitem(source)
+		Set item = doc.ReplaceItemValue( target,sourceitem.values)
+		Call doc.Save( True, True )
+		updcnt = updcnt + 1
+		If dc Is Nothing Then   ' V2.94 21/11/2014
+			Exit Sub
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+End Sub
+Sub HeapSiftDown(pavIn As Variant, piStart As Integer, piEnd As Integer)
+' Used to sort ASC
+	Dim liRoot As Integer
+	Dim liChild As Integer
+	Dim lvTemp As Variant
+	liRoot = piStart
+	While liRoot *2 + 1 <= piEnd
+		liChild = liRoot *2 + 1
+		If liChild +1 <= piEnd Then     ' You cannot combine this test and the next one on the same line as if this is false you will error testing the next line DJS
+			If pavIn(liChild) < pavIn(liChild + 1) Then
+				liChild = liChild + 1
+			End If
+		End If
+		If pavIn(liRoot) < pavIn(liChild) Then
+			lvTemp = pavIn(liRoot)
+			pavIn(liRoot) = pavIn(liChild)
+			pavIn(liChild) = lvTemp
+			liRoot = liChild
+		Else
+			Exit Sub
+		End If
+	Wend
+End Sub
+Sub SignDocument(doc As NotesDocument)
+	While Not doc Is Nothing
+		Call doc.sign
+		Call doc.Save( True, True )
+		updcnt = updcnt + 1
+		If dc Is Nothing Then
+			Exit Sub
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+End Sub
+Sub CopyURL(doc As NotesDocument)  'Sub added at  V3.07
+	Dim nc As NotesNoteCollection
+	Dim ncdoc As NotesDocument
+	Dim URLchoice(1) As String
+	Dim URL As String
+	Dim nid As String
+	Dim nextid As String
+	Dim viewname As String
+	Dim i As Long
+	Dim returnvar As Variant
+
+	URLchoice(0) = NOTES$
+	URLchoice(1) = HTTPS$
+	Dim sn As New NotesName(db.server)
+
+	If Not dc Is Nothing Then
+		If dc.count <> 1 Then
+			MessageBox "This only works on one document at a time",16,SETFIELDVER$ &" Error"
+			Exit Sub
+		End If
+	End If
+
+	If view Is Nothing Then
+		Set nc = db.CreateNoteCollection(False)
+		Call nc.SelectAllDesignElements(False)
+		Call nc.SelectAllIndexElements(False)
+		nc.SelectViews = True
+		Call nc.BuildCollection
+		nid = nc.GetFirstNoteId
+		For i = 1 To nc.Count
+			Set ncdoc = db.GetDocumentByID(nid)
+			If InStr(ncdoc.~$Flags(0),"d") Then
+				If(InStr(ncdoc.~$TITLE(0),"|") > 0) Then
+					viewname = Left(ncdoc.~$TITLE(0),InStr(ncdoc.~$TITLE(0),"|")-1)
+				Else
+					viewname = ncdoc.~$TITLE(0)
+				End If
+				Set view = db.GetView(viewname)
+				Exit For
+			End If
+			nid = nc.GetNextNoteId(nid)
+		Next
+	End If
+
+	If view Is Nothing Then
+		MessageBox "Cannot find a default view for this database, select the doc at the view level and try again",16,SETFIELDVER$ &" Error"
+		Exit Sub
+	End If
+
+	returnvar = ws.Prompt( PROMPT_OKCANCELCOMBO, SETFIELDVER$ &" URL Type Dialog", "What kind of URL do you want?",URLchoice(0) , URLchoice )
+	If returnvar = URLchoice(0) Then
+		URL = NOTES$ & sn.common & "/" & db.ReplicaID & "/" &  view.UniversalID  & "/" & doc.universalID
+	Else
+		URL = HTTPS$ & ONSDOMAIN$  & "/" & db.ReplicaID & "/" &  view.UniversalID  & "/" & doc.universalID  ' Updated V3.08 10/04/2015
+	End If
+	Call setClipboardText(URL)
+	Print Time$ & " : " & SETFIELDVER & " Agent ended OK, copied URL " & URL  & "  to clipboard"
+End Sub
+
+
+
+Sub FindReplace(doc As NotesDocument)
+	' Prompt using values of the selected field, ignore Single/Multi field, always figure that out as and when
+	Dim docitem As NotesItem
+	Dim holdvals() As String
+	Dim replacestring As String
+	Dim dccount As Long
+	Dim w As Long
+	Dim y As Long
+	Dim z As Long
+	Dim s As Long
+	Dim changed As Long
+	Dim arresult As Variant
+
+	If dc Is Nothing Then
+		dccount = 1
+	Else
+		dccount = dc.count
+	End If
+
+	GoSub getholdvals   ' Have to do it with strings
+	' PROMPT_OK (1)  PROMPT_OKCANCELCOMBO (5)  PROMPT_OKCANCELEDIT (3)  PROMPT_OKCANCELEDITCOMBO (6)  PROMPT_OKCANCELLIST (4)
+	' PROMPT_OKCANCELLISTMULT (7)  PROMPT_PASSWORD (10)  PROMPT_YESNO (2)  PROMPT_YESNOCANCEL (11)
+	fr_retval = ws.prompt(6,SETFIELDVER & " Find/Replace Interface " & CStr(dccount) & " selected","Select Value to Replace in field " & fieldname,"",holdvals)
+	If IsEmpty(fr_retval) Then
+		MessageBox "Cancelling as requested",64,SETFIELDVER & " Find/Replace Interface"
+		Exit Sub
+	End If
+	replacestring = InputBox("Input value you want to replace " & fr_retval & " with in field " & fieldname ,SETFIELDVER & " Find/Replace Interface " & CStr(dccount) & " selected",fieldvalue(0))
+
+	Print Time$ & " : " & SETFIELDVER & " Replace value " & fr_retval & " with " & replacestring
+	If replacestring = "" Then
+		MessageBox "Cancelling as requested",64,SETFIELDVER & " Find/Replace Interface"
+		Exit Sub
+	End If
+
+	While Not doc Is Nothing
+		GoSub getholdvals
+		arresult = ArrayReplace( holdvals, fr_retval, replacestring)
+		changed = 0
+		For s = LBound(holdvals) To UBound(holdvals)
+			If(holdvals(s) <> arresult(s)) Then
+				changed = 1
+				Exit For
+			End If
+		Next
+		If(changed = 1) Then
+			Select Case fieldtype
+			Case "Integer (Long)", "Floating Point" :
+				ReDim tempdbl(UBound(arresult))
+				For t = LBound(arresult) To UBound(arresult)
+					tempdbl(t) = CDbl(arresult(t))
+				Next
+				Set item = doc.ReplaceItemValue( fieldname, tempdbl)  ' DJS 21/08/2013
+			Case "Date":
+				Set item = doc.ReplaceItemValue(fieldname, CDat(arresult(0)))
+				For t = LBound(arresult)+1 To UBound(arresult)
+					Call doc.ReplaceItemValue(fieldname, ArrayAppend(item.Values,CDat(arresult(t))))
+				Next
+			Case Else:
+				Set item = doc.ReplaceItemValue( fieldname, arresult)  ' TEXT
+				Call checktype(doc)
+		End Select
+
+			Call doc.Save( True, True )
+			updcnt = updcnt + 1
+		End If
+		If dc Is Nothing Then   ' V2.94 21/11/2014
+			Exit Sub
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+
+	Exit Sub
+
+getholdvals:  ' NEED TO CONVERT TO STRINGS TO WORK CORRECTLY
+	y = 0
+	z = 1
+
+	Set docitem = doc.getfirstitem(fieldname)
+	selval = docitem.text
+	Stop
+	ReDim holdvals(y)
+	For w = 1  To Len(selval)
+		If(Mid(selval,w,1) = ";") Then
+			ReDim Preserve holdvals(y)
+			holdvals(y) = Mid(selval, z,w-z)
+			z = w + 1
+			y = y + 1
+		End If
+	Next
+
+	' GET THE LAST VALUE IF EXISTS
+	If (w > z) Then
+		ReDim Preserve holdvals(y)
+		holdvals(y) = Mid(selval,z,w-z)
+	End If
+	Return
+
+End Sub
+
+Sub AnalyseForms
+	Dim dc As NotesDocumentCollection
+	Dim doc As NotesDocument
+	Dim deldoc As NotesDocument
+	Dim forms() As String
+	Dim formscounts() As String
+	Dim mess As String
+	Dim deleteempty As String
+	Dim formscnt() As Long
+	Dim formsbytes() As Single  ' V3.02
+	Dim total As Long
+	Dim profiletotal As Long
+	Dim i As Long
+	Dim delmkr As Long
+	Dim a As Long
+	Dim b As Long
+	Dim x As Variant
+
+	Print Time$ & " : " & SETFIELDVER & " Analyseforms Starts"
+	deleteempty = InputBox$("Delete documents with no formname? Y/N", SETFIELDVER$ & " Remove documents?","N")
+	deleteempty = UCase(deleteempty)
+	Set dc = db.Alldocuments
+	total = dc.count
+	GoSub countforms
+	Set dc = db.GetProfileDocCollection
+	profiletotal = dc.count
+	If(profiletotal > 0) Then
+		mess = mess & Chr(10) & "========================" & Chr(10) & "Profile Document Summary" & Chr(10) & "========================" & Chr(10)
+		GoSub countforms
+	End If
+	Print Time$ & " : " & SETFIELDVER & " Agent Ends OK Analyseforms Ends"
+	MessageBox mess,64,SETFIELDVER$ &" Documents By Form - Total " & CStr(total + profiletotal)
+
+	Exit Sub
+countforms:
+	i = 0
+	ReDim forms(i)
+	ReDim formscnt(i)
+	ReDim formsbytes(i)     ' V3.02
+	Set doc = dc.getfirstdocument
+	While Not doc Is Nothing
+		If(doc.form(0) = "" And doc.nameofprofile = ""  And deleteempty = "Y") Then
+			Set deldoc = doc
+			delmkr = 1
+		Else
+			If(doc.form(0) = "") Then
+				x = ArrayGetIndex(forms, doc.nameofprofile,5)
+			Else
+				x = ArrayGetIndex(forms,doc.form(0),5)
+			End If
+
+			If IsNull(x)  Then
+				ReDim Preserve forms(i)
+				ReDim Preserve formscnt(i)
+				ReDim Preserve formsbytes(i)     ' V3.02
+				If(doc.form(0) = "") Then
+					forms(i) = doc.nameofprofile
+				Else
+					forms(i) = doc.form(0)
+				End If
+				formscnt(i) = 1
+				formsbytes(i) = doc.size           ' V3.02
+				i = i + 1
+			Else
+				formscnt(x) = formscnt(x) + 1
+				formsbytes(x) = formsbytes(x) + doc.size           ' V3.02
+			End If
+		End If
+		Set doc = dc.getnextdocument(doc)
+		If (delmkr = 1) Then
+			Call deldoc.Remove(True)
+			delmkr = 0
+		End If
+	Wend
+
+	ReDim formscounts(UBound(forms))
+	For b = LBound(forms) To UBound(forms)
+		formscounts(b) = forms(b) &  UString$(50 - Len(forms(b))," ") & formscnt(b) & "  (No.)      " & Format(formsbytes(b),"General Number") & "  (Bytes)"     ' V3.02
+	Next
+
+	Call quicksort(formscounts,"ASC")  ' Sortorder parameter V3.00
+
+	For a = LBound(sortedarray) To UBound(sortedarray)
+		mess = mess & sortedarray(a) & Chr(10)
+	Next
+
+	Return
+End Sub
+Sub CopyDBURL(link as String)   'Sub added at  V3.17
+	Dim uiview As NotesUIView
+	Dim URLchoice(1) As String
+	Dim URL As String
+	Dim returnvar As Variant
+
+	URLchoice(0) = NOTES$
+	URLchoice(1) = HTTPS$
+	Dim sn As New NotesName(db.server)
+	
+	If (link = VIEWLINK$) then
+		Set uiview = ws.CurrentView
+		Set view = db.GetView(uiview.Viewname)
+	End if
+
+	returnvar = ws.Prompt( PROMPT_OKCANCELCOMBO, SETFIELDVER$ &" URL Type Dialog", "What kind of URL do you want?",URLchoice(0) , URLchoice )
+	
+	If returnvar = URLchoice(0) Then
+		URL = NOTES$ & sn.common & "/" & db.ReplicaID
+	Else
+		URL = HTTPS$ & ONSDOMAIN$  & "/" & db.ReplicaID
+	End If
+	
+	If (link = VIEWLINK$) Then
+		URL = URL & "/" &  view.UniversalID
+	End if
+	
+	Call setClipboardText(URL)
+	Print Time$ & " : " & SETFIELDVER & " Agent ended OK, copied URL " & URL  & "  to clipboard"
+End Sub
+Function ReplaceSubstring( ByVal astring As String, substring As String, newsubstring As String) As String
+		Dim index As Long
+		index = InStr( astring, substring)
+		Do While index > 0
+			replaceSubstring = Left$( astring, index - 1) & newsubstring
+			astring = Right$( astring, Len(astring) - index - Len( substring) + 1 )
+			index = InStr( astring, substring)
+		Loop
+		replaceSubstring = replaceSubstring & astring
+End Function
+
+Sub CompareDocs(doc As NotesDocument)
+	Dim path As String
+	Dim filename As String
+	Dim noteid As String
+	Dim holdnoteid As string
+	Dim filenum As Integer
+	Dim dummy As Long
+	Dim i As Long
+	Dim c As Long
+	Dim r As Long
+	Dim holdcreated As Variant
+	Dim holdlastmod As Variant
+	Dim holdformvals As Variant
+	Dim holdbareformitems As Variant
+	Dim retval As Variant
+	
+	If dc.count <> 2 Then
+		MessageBox "This function only works for two selected documents, exiting",16,"Exiting " & SETFIELDVER
+		Exit sub
+	End If
+	
+	holdformvals = formvals 
+	holdbareformitems = bareformitems
+	holdcreated = doc.Created
+	holdlastmod = doc.Lastmodified
+	holdnoteid = "NT" & UString$ ( 8 - Len(doc.Noteid) , "0") & doc.Noteid  
+	
+	For c = LBound(holdbareformitems) To UBound(holdbareformitems)
+		r = InStr(holdbareformitems(c), " ")
+		If r > 0 Then
+			holdbareformitems(c) = Left(holdbareformitems(c),r-1)
+		End If
+	Next
+	
+	Set doc = dc.getnextdocument(doc)
+	If doc Is nothing Then
+		MessageBox "Cannot get the second document, exiting",16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+	
+	Call A_InitVariables(doc)    ' V3.18 Get the form items and corresponding values  End If
+
+	noteid = "NT" & UString$ ( 8 - Len(doc.Noteid) , "0") & doc.Noteid  
+	For c = LBound(bareformitems) To UBound(bareformitems)
+		r = InStr(bareformitems(c), " ")
+		If r > 0 Then
+			bareformitems(c) = Left(bareformitems(c),r-1)
+		End If
+	Next
+	
+	GoSub createfile
+
+	For c = LBound(bareformitems) To UBound(bareformitems)                                       ' Check current doc (2) against the previous doc (1) 
+		retval = ArrayGetIndex(holdbareformitems, bareformitems(c), 5 ) 
+		If IsNull(retval) Then
+			Print # FileNum, "Field " &  bareformitems(c) & " in document last modified " & doc.Lastmodified & " (" & noteid  & ") does not exist in document last modified " & holdlastmod & " (" & holdnoteid  & ")"
+		Else
+			If holdformvals(retval) <> formvals(c) Then
+				Print # FileNum, "Field " &  bareformitems(c) & " in document last modified " & doc.Lastmodified & " (" & noteid  & ") has value " & formvals(c)
+				Print # FileNum, "Field " &  holdbareformitems(retval) & " in document last modified " & holdlastmod  & " (" & holdnoteid  & ") has value " & holdformvals(retval)
+			End If
+		End If
+	Next
+
+	For c = LBound(holdbareformitems) To UBound(holdbareformitems)                         ' Check previous doc (1) against the current doc (2) - only interested in fields not present now
+		retval = ArrayGetIndex(bareformitems, holdbareformitems(c), 5 ) 
+		If IsNull(retval) Then
+			Print # FileNum, "Field " &  holdbareformitems(c) & " in document last modified " & holdlastmod  & " (" & holdnoteid  & ") does not exist in document last modified " & doc.Lastmodified & " (" & noteid  & ")"
+		End If
+	Next
+	
+	Close #FileNum
+	dummy = Shell(TEXTEDITORPATH & " " & filename,1)
+	Print Time$ & " : " & SETFIELDVER & " Agent ended OK - wrote compare log"
+	
+Exit Sub
+	
+createfile:
+	' FIND CORRECT LOCAL PROFILE DIR
+	tempdir=Environ("Temp")
+	If tempdir="" Then
+		tempdir=Environ("Tmp")
+		If tempdir=""  Then
+			tempdir = "D:"   ' Nothing found so use the D root
+		End If
+	End If
+
+	FileName = tempdir & "\" & "MSFCompare.txt"
+	FileNum = FreeFile()
+	Open FileName For Output As FileNum
+	Print # FileNum,"Misc SetField Compare Two Documents Log"
+	Print # FileNum,"------------------------------------------------------------"
+	Print # FileNum,""
+	return
+
+End Sub
+Sub ChangeCase(doc As NotesDocument,whichway As string)
+	While Not doc Is Nothing
+		Set item = doc.GetFirstItem(fieldname)
+		If whichway = "UPPER" Then
+			If(listtype = "Single") Then
+				Set item = doc.ReplaceItemValue( fieldname,UCase$(item.values(0)))
+			Else
+				Set item = doc.ReplaceItemValue( fieldname,UCase(item.values))
+			End if
+		Else
+			If(listtype = "Single") Then
+				Set item = doc.ReplaceItemValue( fieldname,LCase$(item.values(0)))
+			Else
+				Set item = doc.ReplaceItemValue( fieldname,LCase(item.values))
+			End If
+		End If
+
+		Call doc.Save( True, True )
+		updcnt = updcnt + 1
+		If dc Is Nothing Then
+			Exit Sub
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+End Sub
+Sub ReplaceVals(doc As NotesDocument)
+	While Not doc Is Nothing
+		If(listtype = "Single") Then
+			Select Case fieldtype
+				Case "Integer (Long)": 	Set item = doc.ReplaceItemValue(fieldname, fieldvalueint )
+				Case "Floating Point" : Set item = doc.ReplaceItemValue(fieldname, fieldvaluefp)
+				Case "Date":			Set item = doc.ReplaceItemValue(fieldname, CDat(fieldvalue(0)))
+				Case "Rich Text" : Set rtitem = doc.GetFirstItem(fieldname)
+												Call rtitem.Remove
+												Set rtitem = doc.CreateRichTextItem( fieldname)
+												rtitem.Appendtext(fieldvalue(0))
+				Case Else: 			Set item = doc.ReplaceItemValue(fieldname, fieldvalue(0) ) ' TEXT
+									Call checktype(doc)
+			End Select
+		Else  			 ' REPLACE WITH MULTI VALUE FIELDS ENTERED
+			Select Case fieldtype
+			Case "Integer (Long)", "Floating Point" :
+				ReDim tempdbl(UBound(fieldvalue))
+				For t = LBound(fieldvalue) To UBound(fieldvalue)
+					tempdbl(t) = CDbl(fieldvalue(t))
+				Next
+				Set item = doc.ReplaceItemValue( fieldname, tempdbl)  ' DJS 21/08/2013
+			Case "Date":		Set item = doc.ReplaceItemValue(fieldname, CDat(fieldvalue(0)))
+				For t = LBound(fieldvalue)+1 To UBound(fieldvalue)
+					Call doc.ReplaceItemValue(fieldname, ArrayAppend(item.Values,CDat(fieldvalue(t))))
+				Next
+			Case  "Rich Text" : MessageBox fieldtype & " Is not a valid field type for multi-value data.",16,"Exiting " & SETFIELDVER
+											Exit Sub
+			Case Else:			Set item = doc.ReplaceItemValue( fieldname, fieldvalue)  ' TEXT
+										Call checktype(doc)
+		End Select
+		End If
+		Call doc.Save( True, True )
+		updcnt = updcnt + 1
+		If dc Is Nothing Then   ' V2.94 21/11/2014
+			Exit Sub
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+End Sub
+Sub CopyVals(doc As NotesDocument)  ' V3.04
+	Dim clipboardstr As String
+	updcnt = 0
+	While Not doc Is Nothing
+		Set item = doc.GetFirstItem(fieldname)
+		ForAll ii In item.Values
+			clipboardstr = clipboardstr & CStr(ii)  & Chr(10)
+		End ForAll
+		If dc Is Nothing Then  ' MSF called from the open UIDOC
+			updcnt = 1
+			GoTo earlyend
+		End If
+		Set doc = dc.getnextdocument(doc)
+		updcnt = updcnt + 1
+	Wend
+
+earlyend:
+	Call setClipboardText(clipboardstr)
+	Print Time$ & " : " & SETFIELDVER & " Agent ended OK, copied " & CStr(updcnt) & " field contents to clipboard"
+End Sub
+Sub CopyRoles(targetserver As String, targetdbpath As String)
+	Dim acl As NotesACL
+	Dim targetacl As NotesACL
+	Dim entry As NotesACLEntry
+	Dim Choice as integer
+	
+	Dim targetdb As New NotesDatabase(targetserver,targetdbpath)
+	If targetdb Is Nothing Then
+		MessageBox "Cannot find " & targetserver & "!!" & targetdbpath ,16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+	
+	Choice = MessageBox ("Continuing will delete the existing roles in the destination DB " & targetdb.title & ", is this OK", 36,  "Confirmation of deletion " & SETFIELDVER)
+	If(choice = 7) Then
+		MessageBox "Aborting As Requested",16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+
+	'Set the ACL objects
+	Set acl = db.ACL
+	Set targetacl = targetdb.ACL
+
+'Remove Roles
+	Print Time$ & " : " & SETFIELDVER & " Wiping the defined Roles of " & targetdb.Title
+	ForAll r In targetacl.roles
+		If r <> "" Then Call targetacl.deleterole(r)
+	End ForAll
+	Call targetacl.save()
+
+	'Create necessary Roles
+	Print Time$ & " : " & SETFIELDVER & " Copying the Roles to " & targetdb.Title
+	ForAll r In acl.roles
+		If r<>"" Then Call targetacl.addrole(r)
+	End ForAll
+
+	Call targetACL.save()
+	Print Time$ & " : " & SETFIELDVER & " Finished Copying Roles to " & targetdb.Title
+	Call ws.OpenDatabase(targetserver, targetdbpath)
+	Print Time$ & " : " & SETFIELDVER & " Agent ended OK - Copied ACL Roles from " & db.Title & "  to " & targetdb.Title
+
+End Sub
+Sub A_InitVariables(doc As NotesDocument) ' Made into its own sub V3.18
+	Dim body As String
+	v=0
+	ReDim formitems(v)
+	ReDim formitemsexp(v)
+	ReDim formvals(v)
+	ReDim formitemtypes(v)
+	ReDim bareformitems(v)   ' Dominic Spy feature doesn't want the types twice
+
+	ForAll i In doc.Items
+		ReDim Preserve formitems(v)
+		ReDim Preserve formitemsexp(v)
+		ReDim Preserve formvals(v)
+		ReDim Preserve formitemtypes(v)
+		ReDim Preserve bareformitems(v)   ' Dominic Spy feature doesn't want the types twice
+		itemtype = i.type
+		bareformitems(v) = i.Name
+		formitemsexp(v) = i.Name
+		formitems(v) = i.Name & "    (" & finditemtype & ")"
+		formitemtypes(v) = finditemtype
+		
+		z = 0
+		If IsScalar(i.values) Then
+			If Not IsEmpty(i.values) Then                                                             ' V3.16 no reason to not show what is in the start of an RT field
+				body = FullTrim(i.values)                                                                  ' V3.16 
+				If Len(body) > 0 Then                                                                       ' V3.16
+					formvals(v) = Left(body,RTMAXLEN%) & RTLIMITSPIEL$   ' V3.16
+				Else
+					formvals(v) = NOVAL$                                                                  ' V3.16
+				End If
+			Else
+				formvals(v) = NOVAL$
+			End If
+		Else
+			valvar =  i.values
+			For z = LBound(valvar) To UBound(valvar)
+				formvals(v) = formvals(v) & valvar(z) & ";"
+			Next
+			formvals(v) = Left(formvals(v),Len(formvals(v)) -1)
+
+			If(z > 1) Then  ' Display number of elements if more than 1
+				bareformitems(v) = bareformitems(v) & "  (" & CStr(z) & ")"
+				formitems(v) = formitems(v) & "  (" & CStr(z) & ")"        ' V3.00 22/12/2014
+			End If
+		End If
+
+		v = v + 1
+	End ForAll
+	
+	' INSERTION SORT - A not so naive algorithm          Replaced the rather inefficient Bubble Sort  V3.15
+	For x = LBound(formitems) + 1 To UBound(formitems)
+		y = x
+		Inshold = formitems(x)
+		Do While (UCase(formitems(y-1)) >  UCase(Inshold))   ' SORT ASCENDING
+			tempitem = formitems(y)
+			tempval = formvals(y)
+			tempitemtype = formitemtypes(y)
+			tempbareformitems = bareformitems(y)
+
+			formitems(y) = formitems(y-1)
+			formitems(y-1) = tempitem
+
+			formvals(y) = formvals(y-1)
+			formvals(y-1) = tempval
+
+			formitemtypes(y) = formitemtypes(y-1)
+			formitemtypes(y-1) = tempitemtype
+
+			bareformitems(y) = bareformitems(y -1)
+			bareformitems(y -1) = tempbareformitems
+			y = y - 1
+			If y=0 Then
+				Exit Do
+			End If
+		Loop
+		formitems (y) = Inshold
+	Next
+	' END INSERTION SORT - A not so naive algorithm	
+End Sub
+Sub TrimTextField(doc As NotesDocument)
+	Dim trimmedarr As Variant
+	Set sourceitem = doc.getfirstitem(fieldname)
+	itemtype = sourceitem.type
+	If(finditemtype <> "AUTHORS"  And  finditemtype <> "READERS"  And  finditemtype <> "NAMES" And  finditemtype <> "TEXT"  ) Then
+		MessageBox "The field you are trying to trim is of type " & finditemtype & " . I can only trim fields that are textual",16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+	fieldtype = StrConv ( finditemtype , 3 )  ' DONT RELY ON THE USER GETTING THIS TYPE CORRECT
+
+While Not doc Is Nothing
+	Set sourceitem = doc.getfirstitem(fieldname)
+	trimmedarr = FullTrim( sourceitem.values)
+	Set item = doc.ReplaceItemValue( fieldname,trimmedarr)
+	Call checktype(doc)                          ' THIS RESTORES AUTHORS,NAMES, READERS IF SET CORRECTLY BY THE USER
+	Call doc.Save( True, True )
+	updcnt = updcnt + 1
+	If dc Is Nothing Then
+		Exit Sub
+	End If
+	Set doc = dc.getnextdocument(doc)
+Wend
+
+End Sub
+Sub FixbDBDocVersion(doc As NotesDocument)
+		 Const VERSIONVIEW$ = "EDRMSV1"
+		 Dim view As NotesView
+		 Dim versiondoc1 As NotesDocument
+		 Dim versiondoc2 As NotesDocument
+		 Dim prompttext As String
+		 Dim unid1 As String
+		 Dim unid2 As String
+		 Dim version1 As String
+		 Dim versionno1 As String
+		 Dim version2 As String
+		 Dim versionno2 As String
+		 Dim updcnt As Long
+		 Dim reply As Variant
+		 Dim cloneref As Variant
+
+		 Set view = db.getview(VERSIONVIEW$)
+		 If view Is Nothing Then
+			 MessageBox "Cannot find the necessary version view, this only works in a BDB",16,"Exiting " & SETFIELDVER
+			 Exit Sub
+		 End If
+
+		 If dc Is Nothing Then
+		 		 MessageBox "Error you must have exactly two documents selected at the view level",16,"Exiting " & SETFIELDVER
+		 		 Exit Sub
+		 End If
+		 If dc.count <> 2 Then
+		 		 MessageBox "Error you must have exactly two documents selected",16,"Exiting " & SETFIELDVER
+		 		 Exit Sub
+		 End If
+
+		 Set versiondoc1 = dc.getfirstdocument
+		 Set versiondoc2 = dc.getnextdocument(versiondoc1)
+		 unid1 = versiondoc1.universalid
+		 unid2 = versiondoc2.universalid
+		 version1 = CStr(versiondoc1.version(0))
+		 versionno1 = CStr(versiondoc1.versionno(0))
+		 version2 = CStr(versiondoc2.version(0))
+		 versionno2 = CStr(versiondoc2.versionno(0))
+
+		 prompttext = "Choose one document that belongs to the version list in question To give us the correct CloneRef"
+		 cloneref = ws.PickListStrings(3,False,db.server,db.filepath,VERSIONVIEW$,"Version Chooser", prompttext, 1)
+		 If IsEmpty(cloneref) Then
+				 MessageBox "Aborting As Requested",16,"Exiting " & SETFIELDVER
+		 		 Exit Sub
+		 End If
+		 Print cloneref(0)
+		 prompttext = "The first document of those selected: Subject " & versiondoc1.subject(0) & " has version numbers " & version1 & " and  " & versionno1  _
+		  & ". If this is the lower version click Yes, if you want it to be the higher version click No"
+
+		 reply = ws.Prompt(PROMPT_YESNOCANCEL, SETFIELDVER$ &" Version Document Dialog",		 prompttext)
+
+		 Select Case reply
+		 ' Fields to set version, versionno, (numeric)
+		 ' on the lower version
+		 ' clonedto = unid of higher version
+		 ' cloneref = unid of V2 - how to get this if we don't have V2 in scope, mandate that we have To Select all docs In the version scope?
+		 ' on the higher version
+		 ' clonedfrom = unid of lower version
+		 ' cloneref = unid of V2 - how to get this if we don't have V2 in scope, mandate that we have To Select all docs In the version scope?
+
+		 		 Case 1 :
+		 		 		 ' Prompt for correct version - supply existing two version fields should be correct?
+		 		 		 prompttext = "What is the correct Version no for the lower version?"
+		 		 		 reply = ws.Prompt(PROMPT_OKCANCELEDIT, SETFIELDVER$ & " Version No Dialog",		 prompttext,version1)
+		 		 		 If IsEmpty(reply) Then
+			 		 			 MessageBox "Aborting As Requested",16,"Exiting " & SETFIELDVER
+		 		 		 		 Exit Sub
+		 		 		 End If
+		 		 		 versiondoc1.version = CInt(reply)
+		 		 		 versiondoc1.versionno = CInt(reply)
+		 		 		 versiondoc1.clonedto = unid2
+		 		 		 versiondoc1.cloneref = cloneref(0)
+		 		 		 versiondoc1.save True,True
+		 		 		 updcnt = updcnt + 1
+
+		 		 		 prompttext = "What is the correct Version no for the higher version?"
+		 		 		 reply = ws.Prompt(PROMPT_OKCANCELEDIT, SETFIELDVER$ & " Version No Dialog",		 prompttext,version2)
+		 		 		 If IsEmpty(reply) Then
+			 		 			 MessageBox "Aborting As Requested",16,"Exiting " & SETFIELDVER
+		 		 		 		 Exit Sub
+		 		 		 End If
+		 		 		 versiondoc2.version = CInt(reply)
+		 		 		 versiondoc2.versionno = CInt(reply)
+		 		 		 versiondoc2.clonedfrom = unid1
+		 		 		 versiondoc2.cloneref = cloneref(0)
+		 		 		 versiondoc2.save True,True
+		 		 		 updcnt = updcnt + 1
+		 		 Case 0 :
+		 		 		 ' Prompt for correct version - supply existing two version fields should be correct?
+		 		 		 prompttext = "What is the correct Version no for the lower version?"
+		 		 		 reply = ws.Prompt(PROMPT_OKCANCELEDIT, SETFIELDVER$ & " Version No Dialog",prompttext,version2)
+		 		 		 If IsEmpty(reply) Then
+			 		 		 	MessageBox "Aborting As Requested",16,"Exiting " & SETFIELDVER
+		 		 		 		 Exit Sub
+		 		 		 End If
+		 		 		 versiondoc2.version = CInt(reply)
+		 		 		 versiondoc2.versionno = CInt(reply)
+		 		 		 versiondoc2.clonedto = unid1
+		 		 		 versiondoc2.cloneref = cloneref(0)
+		 		 		 versiondoc2.save True,True
+		 		 		 updcnt = updcnt + 1
+
+		 		 		 prompttext = "What is the correct Version no for the higher version?"
+		 		 		 reply = ws.Prompt(PROMPT_OKCANCELEDIT, SETFIELDVER$ & " Version No Dialog", prompttext,version1)
+		 		 		 If IsEmpty(reply) Then
+			 		 			 MessageBox "Aborting As Requested",16,"Exiting " & SETFIELDVER
+		 		 		 		 Exit Sub
+		 		 		 End If
+		 		 		 versiondoc1.version = CInt(reply)
+		 		 		 versiondoc1.versionno = CInt(reply)
+		 		 		 versiondoc1.clonedfrom = unid2
+		 		 		 versiondoc1.cloneref = cloneref(0)
+		 		 		 versiondoc1.save True,True
+		 		 		 updcnt = updcnt + 1
+		 		 Case Else :		 Print Time$ & " : " & SETFIELDVER & " Cancel Pressed"
+		 End Select
+End Sub
+Sub SortTextField(doc As NotesDocument)
+	Dim sortorder(1) As String
+	Dim sortstr As String
+	Dim sortvar As Variant
+
+	Set sourceitem = doc.getfirstitem(fieldname)
+	itemtype = sourceitem.type
+	If(finditemtype <> "AUTHORS"  And  finditemtype <> "READERS"  And  finditemtype <> "NAMES" And  finditemtype <> "TEXT"  ) Then
+		MessageBox "The field you are trying to sort is of type " & finditemtype & " I can only sort fields that are textual",16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+	fieldtype = StrConv ( finditemtype , 3 )  ' DONT RELY ON THE USER GETTING THIS TYPE CORRECT
+
+	sortorder(0) = "ASC"
+	sortorder(1) = "DESC"
+	sortvar = ws.Prompt( PROMPT_OKCANCELCOMBO, SETFIELDVER$ &" Sort Order", "Do you want to sort Ascending or Descending",sortorder(0) , sortorder )
+	If IsEmpty(sortvar) Then
+		Print Time$ & " : " & SETFIELDVER & " Cancel pressed, exiting sort"
+		Exit Sub
+	End If
+	sortstr = sortvar
+
+While Not doc Is Nothing
+	Set sourceitem = doc.getfirstitem(fieldname)
+	Call quicksort(sourceitem.values,sortstr)  ' Sortorder parameter V3.00  NB THIS CONVERTS EVERYTHING TO TEXT IF NOT TEXT
+    Set item = doc.ReplaceItemValue( fieldname,sortedarray)
+	Call checktype(doc)                          ' THIS RESTORES AUTHORS,NAMES, READERS IF SET CORRECTLY BY THE USER
+	Call doc.Save( True, True )
+	updcnt = updcnt + 1
+	If dc Is Nothing Then
+		Exit Sub
+	End If
+	Set doc = dc.getnextdocument(doc)
+Wend
+
+End Sub
+
+Sub EditProfiles
+	Dim profdc As NotesDocumentCollection
+	Dim doc As NotesDocument
+	Dim forms() As String
+	Dim editchoice(1) As String
+	Dim i As Long
+	Dim x As Variant
+	Dim profile As Variant
+	Dim returnvar As Variant
+
+	editchoice(0) = "Back End"
+	editchoice(1) = "Front End"
+
+	Set profdc = db.GetProfileDocCollection
+	If(profdc.count > 0) Then
+		i = 0
+		ReDim forms(i)
+		Set doc = profdc.getfirstdocument
+		While Not doc Is Nothing
+				If(doc.form(0) = "") Then
+					x = ArrayGetIndex(forms, doc.nameofprofile,5)
+				Else
+					x = ArrayGetIndex(forms,doc.form(0),5)
+				End If
+
+				If IsNull(x)  Then
+					ReDim Preserve forms(i)
+					If(doc.form(0) = "") Then
+						forms(i) = doc.nameofprofile
+					Else
+						forms(i) = doc.form(0)
+					End If
+					i = i + 1
+				End If
+			Set doc = profdc.getnextdocument(doc)
+		Wend
+
+		Call quicksort(forms,"ASC")  ' Sortorder parameter V3.00
+
+		profile = ws.Prompt( PROMPT_OKCANCELLIST, SETFIELDVER$ &" Profile Document Dialog", "Choose the profile to edit - the form must exist in this DB for a front-end edit.",sortedarray(0), sortedarray )
+		If Not IsEmpty(profile) Then                         ' Cancel or escape pressed
+' V2.94 21/11/2014 DJS
+			returnvar = ws.Prompt( PROMPT_OKCANCELCOMBO, SETFIELDVER$ &" Profile Document Dialog", "Do you want to edit with the Front End form or the Back End doc with Misc Setfield?",editchoice(0) , editchoice )
+			If returnvar = editchoice(1) Then           ' Front End
+				Print Time$ & " : " & SETFIELDVER & " Frontend edit of profile " &profile & " selected"
+				Set uidoc = ws.EditProfile( profile )
+			Else                                                             ' Back End
+				Set doc = db.getprofiledocument(profile)
+				Set dc = Nothing
+				popup.thisisprofiledoc = 1                ' causes the visual display that this is a profile doc
+				Print Time$ & " : " & SETFIELDVER & " Backend edit of profile " &profile & " selected"
+				Call A_MainLogic(doc)
+			End If
+		End If
+	Else ' No profiles found
+		MessageBox "Sorry, no profiles found to edit",16,SETFIELDVER$ & " Profile Document Result"
+		Return
+	End If
+End Sub
+Sub CopyACL(targetserver As String, targetdbpath As String)
+	Dim acl As NotesACL
+	Dim targetacl As NotesACL
+	Dim entry As NotesACLEntry
+	Dim targetEntry As NotesACLEntry
+	Dim entry2 As NotesACLEntry
+	
+	Dim targetdb As New NotesDatabase(targetserver,targetdbpath)
+	If targetdb Is Nothing Then
+		MessageBox "Cannot find " & targetserver & "!!" & targetdbpath ,16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+
+	'Set the ACL objects
+	Set acl = db.ACL
+	Set targetacl = targetdb.ACL
+
+	'Remove the ACL entries from the target database, to avoid having duplicates
+	Print Time$ & " : " & SETFIELDVER & " Wiping the ACL Entries of " & targetdb.Title
+	Set targetentry = targetacl.getfirstEntry
+	While Not(targetentry Is Nothing)
+		'Skip if entry is -Default-
+		If targetentry.name <> "-Default-" And targetentry.name <> sess.username And targetentry.name <> "LocalDomainServers" And targetentry.name <> "DB Admins"  Then
+			Set entry2 = targetacl.getnextentry(targetentry)
+			Call targetentry.remove()
+			Call targetACL.save()
+			Set targetentry = entry2
+		Else
+			Set targetentry = targetacl.getnextentry(targetentry)
+		End If
+	Wend
+	'Remove Roles
+	Print Time$ & " : " & SETFIELDVER & " Wiping the defined Roles of " & targetdb.Title
+	ForAll r In targetacl.roles
+		If r<>"" Then Call targetacl.deleterole(r)
+	End ForAll
+	Call targetacl.save()
+
+	'Create necessary Roles
+	Print Time$ & " : " & SETFIELDVER & " Copying the Roles to " & targetdb.Title
+	ForAll r In acl.roles
+		If r<>"" Then Call targetacl.addrole(r)
+	End ForAll
+
+	'now write the ACL to the target database
+	Print Time$ & " : " & SETFIELDVER & " Copying the ACL Entries to " & targetdb.Title
+	Set entry = acl.GetFirstEntry
+	While Not(entry Is Nothing)
+		If entry.name <> "-Default-" And entry.name <> sess.username  And entry.name <> "LocalDomainServers" And entry.name <> "DB Admins"  Then
+			Set targetEntry = targetACL.CreateACLEntry(entry.name, entry.level)
+			' Note: The order the NotesACLEntry properties are enabled can effect each other.
+			' If properties are not enabled/disabled then try altering the order.
+			' Typically the Can properties should always be set last.
+			targetentry.usertype = entry.usertype
+			targetentry.isgroup = entry.isgroup
+			targetentry.isperson = entry.isperson
+			targetentry.isserver = entry.isserver
+			targetentry.ispublicreader = entry.ispublicreader
+			targetentry.ispublicwriter = entry.ispublicwriter
+			targetentry.IsAdminServer = entry.IsAdminServer
+			targetentry.IsAdminReaderAuthor = entry.IsAdminReaderAuthor
+			targetentry.CanCreateDocuments = entry.CanCreateDocuments
+			targetentry.CanDeleteDocuments = entry.CanDeleteDocuments
+			targetentry.CanCreatePersonalAgent = entry.CanCreatePersonalAgent
+			targetentry.CanCreateLSorJavaAgent = entry.CanCreateLSorJavaAgent
+			targetentry.CanCreateSharedFolder = entry.CanCreateSharedFolder
+			targetentry.CanCreatePersonalFolder = entry.CanCreatePersonalFolder
+			targetentry.CanReplicateorCopyDocuments = entry.CanReplicateorCopyDocuments
+			ForAll r In entry.roles
+				If r<>"" Then Call targetentry.enablerole(r)
+			End ForAll
+			Call targetACL.save()
+		End If
+		Set entry = acl.GetNextEntry(entry)
+	Wend
+
+	Print Time$ & " : " & SETFIELDVER & " Setting the Default ACL for " & targetdb.Title
+	Set targetentry=targetacl.getentry("-Default-")
+	Set entry=acl.getentry("-Default-")
+	targetentry.level = entry.level
+	targetentry.ispublicreader = entry.ispublicreader
+	targetentry.ispublicwriter = entry.ispublicwriter
+	targetentry.CanCreateDocuments = entry.CanCreateDocuments
+	targetentry.CanDeleteDocuments = entry.CanDeleteDocuments
+	targetentry.CanCreatePersonalAgent = entry.CanCreatePersonalAgent
+	targetentry.CanCreateLSorJavaAgent = entry.CanCreateLSorJavaAgent
+	targetentry.CanCreateSharedFolder = entry.CanCreateSharedFolder
+	targetentry.CanCreatePersonalFolder = entry.CanCreatePersonalFolder
+	targetentry.CanReplicateorCopyDocuments = entry.CanReplicateorCopyDocuments
+
+	Print Time$ & " : " & SETFIELDVER & " Setting the Default Roles for " & targetdb.Title
+	ForAll r In entry.roles
+		If r<>"" Then Call targetentry.enablerole(r)
+	End ForAll
+
+	Call targetACL.save()
+	Print Time$ & " : " & SETFIELDVER & " Finished Copying ACL to " & targetdb.Title
+	Call ws.OpenDatabase(targetserver, targetdbpath)
+	Print Time$ & " : " & SETFIELDVER & " Agent ended OK - Copied ACL from " & db.Title & "  to " & targetdb.Title
+
+End Sub
+Sub RenameField(doc As NotesDocument)
+	While Not doc Is Nothing
+		Set sourceitem = doc.getfirstitem(fieldname)
+		Set item = doc.ReplaceItemValue( rename,sourceitem.values)
+		Call  sourceitem.Remove
+		Call doc.Save( True, True )
+		updcnt = updcnt + 1
+		If dc Is Nothing Then
+			Exit Sub
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+End Sub
+
+
+Function SetClipboardText(pstrText As String) As Boolean
+'// +++ GLOBAL VARIABLES +++
+'// Constants:
+'// {record any global constants here}
+'//
+'// Class instances:
+'// {record any global class intances here}
+'//
+'// Primitives:
+'// {record any global primitives here}
+'//
+'// 05/21/2004 - Dallas Gimpel
+'//
+'// DESCRIPTION:
+'// This function attempts to programmatically copy the text passed in to the Windows
+'// clipboard (if it can be opened).
+'//
+'// NOTE:
+'// This code is obviously Win/32 specific.
+'//
+'// INPUT:
+'// pstrText - String, text to be copied to the Windows clipboard
+'//
+'// OUTPUT:
+'// Function returns true if text can be successfully copied to the clipboard
+
+'// one of the "standard clipboard formats"
+	Const CF_TEXT = 1
+'// global memory flags
+	Const GMEM_FIXED& = &H0
+	Const GMEM_MOVEABLE& = &H2
+	Const GMEM_NOCOMPACT& = &H10
+	Const GMEM_NODISCARD& = &H20
+	Const GMEM_ZEROINIT& = &H40
+	Const GMEM_MODIFY& = &H80
+	Const GMEM_DISCARDABLE& = &H100
+	Const GMEM_NOT_BANKED& = &H1000
+	Const GMEM_SHARE& = &H2000
+	Const GMEM_DDESHARE& = &H2000
+	Const GMEM_NOTIFY& = &H4000
+	Const GMEM_LOWER& = GMEM_NOT_BANKED
+	Const GMEM_VALID_FLAGS& = &H7F72
+	Const GMEM_INVALID_HANDLE& = &H8000
+	Const GHND& = (GMEM_MOVEABLE Or GMEM_ZEROINIT)
+	Const GPTR& = (GMEM_FIXED Or GMEM_ZEROINIT)
+	Dim lngHWnd As Long
+	Dim lngCBStatus As Long
+	Dim lngHGMem As Long
+	Dim lngGMemPointer As Long
+	Dim lngSize As Long
+	Dim lngRC As Long
+
+	setClipboardText = False
+
+'// Get a handle to the current window.
+	lngHWnd& = W32GetActiveWindow()
+
+'// Determine the size required.
+	lngSize& = CLng(Len(pstrText$) + 1)
+
+'// Attempt to obtain a memory handle.
+	lngHGMem& = W32GlobalAllocate(GPTR&, lngSize&)
+	If lngHGMem& = 0 Then
+		MsgBox "An error was encountered while attempting to obtain a global memory handle.", , "Error encountered . . ."
+		GoTo functionExit
+	End If
+
+'// Attempt to lock the memory handle and store a pointer to it.
+	lngGMemPointer& = W32GlobalLock(lngHGMem&)
+	If lngGMemPointer& = 0 Then
+		MsgBox "Failed to lock the memory to which the text is to be copied - unable to continue.", , "Error encountered . . ."
+		GoTo functionExit
+	End If
+
+'// Copy the string passed into the memory allocated.
+	lngRC& = W32WriteStringToMemory(lngGMemPointer&, pstrText$)
+
+'// Release the memory.
+	Call W32GlobalUnlock(lngHGMem&)
+
+'// Attempt to open the clipboard.
+	lngCBStatus& = W32OpenClipboard(lngHWnd&)
+	If lngCBStatus& = 0 Then
+		MsgBox {Could not access the "clipboard" - another application may have it locked.}, , "Error encountered . . ."
+		GoTo functionExit
+	End If
+
+'// Always empty the clipboard first.
+	lngRC& = W32EmptyClipboard()
+
+'// Now attempt to copy the text to the clipboard.
+	lngRC& = W32SetClipboardData(CF_TEXT, lngHGMem&)
+
+'// Check to see if the text is there.
+	lngRC& = W32IsClipboardFormatAvailable(CF_TEXT)
+	If lngRC& = 0 Then
+		MsgBox "An error was encountered while attempting to copy the specified text to the clipboard.", , "Error encountered . . ."
+	Else
+		setClipboardText = True
+	End If
+
+functionExit:
+'// Always make sure to close the clipboard (even in the event of an error).
+	If Not(lngCBStatus& = 0) Then
+		Call W32CloseClipboard()
+		lngCBStatus& = 0
+	End If
+
+End Function
+Sub CheckType(doc As NotesDocument)
+	Select Case fieldtype
+		Case "Names" : GoSub setnames
+		Case "Authors" : GoSub setauthors
+		Case "Readers" : GoSub setreaders
+		Case "Integer (Long)" : GoSub setinteger
+		Case "Text" : GoSub settext
+		Case "Rich Text" : GoSub setrichtext
+		Case "Date" : GoSub setdate
+		Case "Summary" : GoSub setsummary
+	End Select
+	Exit Sub
+
+setreaders:
+	Item.IsReaders = True
+	Return
+
+setauthors:
+	Item.IsAuthors = True
+	Return
+
+setnames:
+	Item.Isnames = True
+	Return
+
+setsummary:  ' Set Summary field attribute so item displays in a view, DECS in particular has a habit of not setting this
+	Item.Issummary = True
+	Return
+
+setinteger:         ' Updated in V3.09 when I realised that there was no way to set long int values so changed Cint to Clng DJS 07/05/2015
+	If (exist = 5) Then  ' Just change type
+		Set item = doc.ReplaceItemValue( fieldname, CLng(item.values(0)))  '  WHEN MANY ARE SELECTED THEN CHANGING THE TYPE SHOULD NOT SET SELVAL
+	Else
+		Set item = doc.ReplaceItemValue( fieldname, CLng(selval(0)))   		' THIS ASSUMES THAT WE WANT ALL TO BE THE SAME VALUE
+	End If
+
+	Return
+
+setdate:
+	If (exist = 5) Then  ' Just change type
+		Set item = doc.ReplaceItemValue( fieldname, CDat(item.values(0)))  '  WHEN MANY ARE SELECTED THEN CHANGING THE TYPE SHOULD NOT SET SELVAL
+	Else
+		Set item = doc.ReplaceItemValue( fieldname, CDat(selval(0)))  ' THIS ASSUMES THAT WE WANT ALL TO BE THE SAME VALUE
+	End If
+	Return
+
+settext:
+' On the _msfpopup form, the exist combobox has the following values 
+' 1   Replace Value(s)|1
+' 2   Append Value(s)|2
+' 3   New Field|3
+' 5   Change Type|5
+	Select Case exist
+	Case "1" :
+	Case "2" :
+	Case "3" : Set item = doc.ReplaceItemValue( newfieldname, fieldvalue(0))
+	Case "5" : Set item = doc.ReplaceItemValue( fieldname,CStr(item.values(0)))  '  WHEN MANY ARE SELECTED THEN CHANGING THE TYPE SHOULD NOT SET SELVAL DJS 12/03/2014
+	End Select
+	Return
+	
+setrichtext:
+	' On the _msfpopup form, the exist combobox has the following values 
+	' 1   Replace Value(s)|1
+	' 2   Append Value(s)|2
+	' 3   New Field|3
+	' 5   Change Type|5
+	Select Case exist
+		Case "1" :
+		Case "2" :
+		Case "3" : 
+		Case "5" : Set item = doc.GetFirstItem(fieldname)
+			holdvalue = CStr(item.values(0))
+			Call item.Remove
+			Set rtitem = doc.CreateRichTextItem(fieldname)
+			rtitem.Appendtext(holdvalue)
+	End Select
+	return
+
+End Sub
+Sub WsAutoFit(Arange As String) ' autofit currentcell
+	Dim vRange As Variant
+	vRange = CVar(Arange)
+	wsObject.range(vRange).select
+	wsObject.selection.columns.autofit
+	wsObject.selection.rows.autofit
+End Sub
+Sub HeapSort(pavIn As Variant, sortorder As String)
+' To call heapsort
+' Call heapsort(heapsortvar,"ASC") or 	Call heapsort(heapsortvar,"DESC") where heapsortvar is a 
+' global variant that contains the passed in unsorted array and the sorted output array 
+	Dim liCount As Integer
+	Dim liEnd As Integer
+	Dim lvTemp As Variant
+	liCount = UBound(pavIn) + 1
+	
+	heapify pavIn, liCount, sortorder
+	
+	liEnd = liCount - 1
+	While liEnd > 0
+		lvTemp = pavIn(liEnd)
+		pavIn(liEnd) = pavIn(0)
+		pavIn(0) = lvTemp
+		liEnd = liEnd -1
+		If sortorder = "ASC" Then
+			heapsiftDown pavIn,0, liEnd
+		Else
+			heapsiftUp pavIn,0, liEnd
+		End If
+	Wend
+End Sub
+Sub AppendVals(doc As NotesDocument)
+	While Not doc Is Nothing
+		Set item = doc.GetFirstItem(fieldname)
+		If(listtype = "Single") Then
+			Select Case fieldtype
+			Case "Integer (Long)", "Floating Point":
+				Call doc.ReplaceItemValue(item.name, ArrayAppend(item.Values,CDbl(fieldvalue(0)))) ' DOUBLE ODDLY DJS 21/08/2013
+			Case "Date": 	Call doc.ReplaceItemValue(item.name, ArrayAppend(item.Values,CDat(fieldvalue(0))))
+			Case "Rich Text" : Set rtitem = doc.GetFirstItem(fieldname)
+												rtitem.Appendtext(fieldvalue(0))
+			Case Else: 		Call item.AppendToTextList(fieldvalue(0) )  ' TEXT
+				Call checktype(doc)
+		End Select
+		Else          ' APPEND MULTI VALUE FIELDS ENTERED
+			Select Case fieldtype
+			Case "Integer (Long)", "Floating Point":
+				ReDim tempdbl(UBound(fieldvalue))
+				For t = LBound(fieldvalue) To UBound(fieldvalue)
+					tempdbl(t) = CDbl(fieldvalue(t))
+				Next
+				Call doc.ReplaceItemValue(item.name, ArrayAppend(item.Values,tempdbl))
+			Case "Date":		For t = LBound(fieldvalue) To UBound(fieldvalue)
+				Call doc.ReplaceItemValue(fieldname, ArrayAppend(item.Values,CDat(fieldvalue(t))))
+			Next
+		Case  "Rich Text" : MessageBox fieldtype & " Is not a valid field type for multi-value data.",16,"Exiting " & SETFIELDVER
+			Exit Sub
+		Case Else:			Call item.AppendToTextList(fieldvalue)   ' TEXT
+			Call checktype(doc)
+	End Select
+	End If
+	Call doc.Save( True, True )
+	updcnt = updcnt + 1
+	If dc Is Nothing Then   ' V2.94 21/11/2014
+		Exit Sub
+	End If
+	Set doc = dc.getnextdocument(doc)
+Wend
+End Sub
+Sub InsertionSort ( sA() As String, sortorder As String)
+	Dim i As Long
+	Dim x As Long
+	Dim v As String
+	Dim Found As Long
+
+	If UCase(sortorder) = "DESC" Then
+		For i = LBound(sa) + 1 To UBound(sa)
+			x = i
+			v = sA (i )
+			Do While (sA(x-1) < v)   ' SORT DESCENDING
+				sA ( x ) = sA ( x-1 )
+				x = x - 1
+				If x=0 Then
+					Exit Do
+				End If
+			Loop
+			sA (x) = v
+		Next
+
+	Else
+
+		For i = LBound(sa) + 1 To UBound(sa)
+			x = i
+			v = sA (i )
+			Do While (sA(x-1) > v)   ' SORT ASCENDING
+				sA ( x ) = sA ( x-1 )
+				x = x - 1
+				If x=0 Then
+					Exit Do
+				End If
+			Loop
+			sA (x) = v
+		Next
+
+	End If
+End Sub
+Function ShellSort(arr() As String, sortorder As String) As Variant
+	Dim v As String	
+	Dim Lower As Long
+	Dim Upper As Long
+	Dim botMax As Long
+	Dim i As Long
+	Dim k As Long
+	Dim h As Long
+	
+	Lower = LBound(arr())
+	Upper = UBound(arr())
+	h = 1
+	
+	Do
+		h = (3 * h) + 1
+	Loop Until ( h > (Upper - Lower + 1))
+	Do
+		h = h \ 3                                                     ' Integer division, the \ truncates any fractional part
+		botMax = Lower + h - 1
+		For i = botMax + 1 To Upper
+			v = arr(i)
+			k = i
+			If UCase(sortorder) = "DESC" then
+				While arr ( k - h ) < v    ' DESC 
+					arr (k) = arr (k - h)
+					k = k - h
+					If (k <= botMax) Then GoTo wOut
+				Wend
+			else
+				While arr ( k - h ) > v    ' ASC 
+					arr (k) = arr (k - h)
+					k = k - h
+					If (k <= botMax) Then GoTo wOut
+				Wend
+			End if
+wOut:
+			If (k <> i) Then arr(k) = v
+		Next i
+	Loop Until h = 1
+	
+	ShellSort = arr
+End Function
+
+Sub ChangeLogDisplay
+	Dim path As String
+	Dim filename As String
+	Dim dummy As Long
+	dim filenum as integer
+	Dim i As Long
+
+' FIND CORRECT LOCAL PROFILE DIR
+	tempdir=Environ("Temp")
+	If tempdir="" Then
+		tempdir=Environ("Tmp")
+		If tempdir=""  Then
+			tempdir = "D:"   ' Nothing found so use the D root
+		End If
+	End If
+
+	FileName = tempdir & "\" & "MSFChangelog.txt"
+	FileNum = FreeFile()
+	Open FileName For Output As FileNum
+
+	Print # FileNum,"Misc SetField Change Log"
+	Print # FileNum,"------------------------------------"
+
+	For i = UBound(changelog) To LBound(changelog) Step -1
+		Print # FileNum, changelog(i)
+	Next
+
+	Close #FileNum
+	dummy = Shell(TEXTEDITORPATH & " " & filename,1)
+	Print Time$ & " : " & SETFIELDVER & " Agent ended OK - wrote changelog"
+End Sub
+Sub CopyProfile
+	Dim profdc As NotesDocumentCollection
+	Dim doc As NotesDocument
+	Dim targetprofiledoc As NotesDocument
+	Dim forms() As String
+	Dim i As Long
+	Dim msgreply As Long
+	Dim x As Variant
+	Dim profile As Variant
+
+	Dim targetdb As New NotesDatabase(targetserver,targetdbpath)
+	If targetdb Is Nothing Then
+		MessageBox "Cannot find " & db.Server & "!!" & targetdbpath ,16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+
+	Set profdc = db.GetProfileDocCollection
+	If(profdc.count > 0) Then
+		i = 0
+		ReDim forms(i)
+		Set doc = profdc.getfirstdocument
+		While Not doc Is Nothing
+			If(doc.form(0) = "") Then
+				x = ArrayGetIndex(forms, doc.nameofprofile,5)
+			Else
+				x = ArrayGetIndex(forms,doc.form(0),5)
+			End If
+
+				If IsNull(x)  Then
+					ReDim Preserve forms(i)
+					If(doc.form(0) = "") Then
+						forms(i) = doc.nameofprofile
+					Else
+						forms(i) = doc.form(0)
+					End If
+					i = i + 1
+				End If
+			Set doc = profdc.getnextdocument(doc)
+		Wend
+
+		Call quicksort(forms,"ASC")  ' Sortorder parameter V3.00
+
+		profile = ws.Prompt( PROMPT_OKCANCELLIST, SETFIELDVER$ &" Profile Document Dialog", "Choose the profile to copy",sortedarray(0), sortedarray )
+		If Not IsEmpty(profile) Then                         ' Cancel or escape pressed
+			Set doc = db.getprofiledocument(profile)
+			If Not doc Is Nothing Then
+				Set targetprofiledoc = targetdb.getprofiledocument(profile)
+				If Not targetprofiledoc Is Nothing And Not targetprofiledoc.isnewnote Then
+					msgreply = MessageBox("A profile doc of the same name exists in the target database, delete and replace?",36,SETFIELDVER & " Profile " & profile & " exists")
+					If msgreply = 6 Then
+						targetprofiledoc.Removepermanently(True)
+						Call doc.Copytodatabase(targetdb)
+						Print Time$ & " : " & SETFIELDVER & " Agent ended OK, Profile document " & profile & " copied to " & targetdb.title
+					End If
+				Else
+					Call doc.Copytodatabase(targetdb)
+					Print Time$ & " : " & SETFIELDVER & " Agent ended OK, Profile document " & profile & " copied to " & targetdb.title
+				End If
+			Else
+				Print Time$ & " : " & SETFIELDVER & " Profile document " & profile & " unable to be accessed in the usual way"
+			End If
+		End If
+	Else ' No profiles found
+		MessageBox "Sorry, no profiles found",16,SETFIELDVER$ & " Profile Document Result"
+		Return
+	End If
+
+End Sub
+Sub Export(popup As NotesDocument)
+	Dim doc As NotesDocument
+	Dim item As NotesItem
+	Dim delimeter As String
+	Dim filename As String
+	Dim exportvalues As String
+	Dim hold As String
+	Dim holdclean As String
+	dim filenum as integer
+	Dim r As Long
+	Dim t As Long
+	Dim w As Long
+	Dim expcnt As Long
+	Dim chosen As Variant
+	Dim holdvar As Variant
+	Dim filenamevar As Variant
+	Dim retval As Variant
+
+	chosen = popup.chosen
+	If(IsEmpty(chosen) Or IsNull(chosen) Or chosen(0) ="") Then
+		MessageBox "No fields selected, exiting",16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+
+	GoSub processfilesub
+
+' Write Field names - make this optional
+	exportvalues = ""
+	For r = LBound(chosen) To UBound(chosen)
+		exportvalues = exportvalues & chosen(r) & delimeter
+	Next
+	GoSub writefilesub
+
+' Export the docs
+	Set doc = dc.Getfirstdocument()
+	While Not doc Is Nothing
+		exportvalues = ""
+
+		For r = LBound(chosen) To UBound(chosen)
+			Set item = doc.GetFirstItem(chosen(r))
+			If item Is Nothing Then    ' IF FIELD NOT PRESENT
+				holdclean = ""
+			Else
+				holdvar = item.values
+				hold = ""
+				If(UBound(holdvar) > 0) Then   ' Value of 1 was ignoring 2 element array
+					For w = LBound(holdvar) To UBound(holdvar)
+						hold = hold & holdvar(w) & ";"
+					Next
+					hold = Left(hold,Len(hold) -1)   ' STRIP OFF SURPLUS semi-colon
+				Else
+					hold = CStr(holdvar(0))
+				End If
+				GoSub stripchars
+			End If
+
+			exportvalues = exportvalues & holdclean & delimeter
+
+		Next
+		GoSub writefilesub
+		Set doc = dc.getnextdocument(doc)
+	Wend
+
+	Close fileNum
+
+	Print Time$ & " : " & SETFIELDVER & " Agent ended OK, exported " & CStr(dc.count) & " documents . . . . launching Excel . . . ."
+	Set wsObject = CreateObject("Excel.Application")
+	wsObject.Workbooks.Open filename
+
+' Autofit to range
+	wsAutofit("A1:Z"&dc.count)
+
+' Go to A1
+	wsGoto("A1")
+
+' Save as XLS - due to the confusion about what happens when you save a CSV you have formatted in Excel
+	wsObject.activeworkbook.saveas filenamexls, 56   ' 56 parameter is Excel 97-2003 format
+
+' Make Excel visible
+	wsobject.visible = True
+
+
+	Exit Sub
+'**********************************************************************************************************************
+
+processfilesub:
+	filenum = FreeFile()
+	filename = popup.filename(0)
+	delimeter = popup.delimeter(0)
+	Open filename For Output As fileNum
+	Return
+
+writefilesub:
+	Print #fileNum, exportvalues
+	expcnt = expcnt + 1
+	Return
+
+stripchars:
+	holdclean = ""
+	For t = 1 To Len(hold)
+		If(Mid$(hold,t,1) = "," Or Mid$(hold,t,1) = ":" Or Mid$(hold,t,1) = Chr(10) Or Mid$(hold,t,1) = Chr(13)) Then
+			holdclean = holdclean & " "
+		Else
+			holdclean = holdclean & Mid$(hold,t,1)
+		End If
+	Next
+	Return
+
+End Sub
+
+Sub WsSetCurrentCell(cellref) ' set wsCurrentCol and wsCUrrentRow from a cell ref
+	Dim cr As String
+	Dim rr As String
+	Dim wsCurrentCol As Long ' current column
+	Dim wsCurrentRow As Long 'current row
+	Dim wsLastRow As Long ' numeric value of last row populated
+	Dim rpos As Long
+
+	cr = UCase(cellref)
+
+	wsCurrentCol = Asc(Left(cr,1)) - 64
+	rpos = 2
+	If (Mid(cr,2,1) >= "A") And (Mid(cr,2,1) <= "Z")Then
+		wsCurrentCol = (wsCurrentCol * 26)  + Asc(Mid(cr,2,1)) - 64
+		rpos = 3
+	End If
+	rr = Mid(cr,rpos, 1 + Len(cr) - rpos)
+
+	wsCurrentRow = CInt(rr)
+	If wsCurrentRow > wsLastRow Then wsLastRow = wsCurrentRow
+End Sub
+Sub RemoveEDRMS(doc As NotesDocument)
+	Dim edrmsfields(14) As String
+	Dim v As Long
+	Dim w As Long
+ 	v = 0
+'. edrmsinitialdeclaration is deliberately omitted as is edrmslastmod as these are present declared or undeclared V3.11 DJS
+	edrmsfields(0) = "edrmsrecord"
+	edrmsfields(1) = "edrmsdate"
+	edrmsfields(2) = "edrmsdeclaredby"
+	edrmsfields(3) = "edrmscategory"
+	edrmsfields(4) = "edrmsundeclarepending"
+	edrmsfields(5) = "edrmsreviewdate"
+	edrmsfields(6) = "edrmsreviewstatus"
+	edrmsfields(7) = "edrmsdeleteversion"
+	edrmsfields(8) = "edrmssourcebdbtitle"
+	edrmsfields(9) = "edrmssourcebdbpath"
+	edrmsfields(10) = "edrmsreviewedby"
+	edrmsfields(11) = "edrmsreviewedbydate"
+	edrmsfields(12) = "edrmsdelayedflag"
+	edrmsfields(13) = "edrmstransferdate"
+	edrmsfields(14) = "edrmsdeleteflag"
+
+	While Not doc Is Nothing
+		v = 0
+		For w = LBound(edrmsfields) To UBound(edrmsfields)
+			Set item = doc.GetFirstItem(edrmsfields(w))
+			If item Is Nothing Then
+				Print Time$ &" :" & SETFIELDVER &" Cannot locate field " & edrmsfields(w)
+			Else
+				Call item.Remove
+				v = v + 1
+			End If
+		Next
+
+		If v > 0 Then
+			Call doc.Save( True, True )
+			updcnt = updcnt + 1
+		End If
+
+		If dc Is Nothing Then
+			Exit Sub
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+
+End Sub
+Sub CreateDocument
+	Dim forms() As String
+	Dim editchoice(1) As String
+	Dim w As Long
+	Dim retval As Variant
+	Dim retchoice As Variant
+
+	editchoice(0) = "Normal Doc"
+	editchoice(1) = "Profile Doc"
+	w = 0
+	ReDim forms(w)
+	ForAll form In db.Forms
+		ReDim Preserve forms(w)
+		forms(w) = form.Name
+		w = w + 1
+	End ForAll
+	Call quicksort(forms, "ASC")
+
+	retval = ws.Prompt( PROMPT_OKCANCELLIST, SETFIELDVER$ &" Form Dialog", "Choose the form for the document you want to create.",sortedarray(0), sortedarray )
+	If Not IsEmpty(retval) Then
+		retchoice = ws.Prompt( PROMPT_OKCANCELCOMBO, SETFIELDVER$ &" Document Type Dialog", "What kind of document to create?",editchoice(0) , editchoice )
+		If Not IsEmpty(retchoice) Then
+			If retchoice = editchoice(1) Then           ' Profile Doc
+				Set uidoc = ws.EditProfile(retval)
+				Print Time$ & " : " & SETFIELDVER & " Profile Document " & retval & " created"
+			Else
+				Set uidoc = ws.Composedocument(db.server,db.Filepath,retval) ' Normal Doc
+				Print Time$ & " : " & SETFIELDVER & " Document " & retval & " created"
+			End If
+		End If
+	End If
+End Sub
+Sub FindProhibit(removeprohibit As Boolean, msg As Boolean)  ' Param 1 remove prohibit flag (signing issues), Param 2 display Messagebox of result
+	Dim nc As NotesNoteCollection
+	Dim ndbd As NotesDbDirectory
+	Dim doc As NotesDocument
+	Dim nid As String
+	Dim Title As String
+	Dim Flags As String
+	Dim oldFlags As String
+	Dim runmode As String
+	Dim i As Long
+	Dim Alter As Long
+	Dim cnt As Long
+	Dim examine As Long
+	Dim updelement As Long
+	Dim problemcnt As Long
+	Dim eval As Variant
+
+	examine = 0
+	updelement = 0
+	problemcnt = 0
+	prohibitcnt = 0
+
+	Set nc = db.CreateNoteCollection(False)  ' Handle on target db
+	GoSub donnc
+	nid = nc.GetFirstNoteId
+	For i = 1 To nc.Count                                                               ' Find on target db
+		Set doc = db.GetDocumentByID(nid)
+		If Not doc Is Nothing Then                         ' DJS 05/04/2014 - isolated problem probably
+			flags = doc.GetItemValue("$Flags")(0)                          ' Looks mad but works
+			title = doc.GetItemValue("$Title")(0)
+
+			' Match protected elements except folders that are named *(*)
+			Alter = False
+			If Flags Like "*P*F*" Then ' protected folder
+				If Title Like "(*)" Then ' not a user folder
+					Alter = True
+				End If
+			ElseIf Flags Like "*P*" Then
+				Alter = True
+			End If
+
+			If Alter Then
+				GoSub objecttype
+				Print Time$ & " : " & SETFIELDVER & " Prohibit design refresh is on for " &  eval(0) & " " & title
+				ReDim Preserve prohibit(prohibitcnt)
+				prohibit(prohibitcnt) = eval(0) & " " & title
+				prohibitcnt = prohibitcnt + 1
+				If removeprohibit = True Then
+					oldFlags = flags
+					Flags = replaceSubString(Flags,"P", "")
+					Call doc.ReplaceItemValue("$Flags", Flags)
+					Call doc.Save(True,True,True)
+					updelement = updelement + 1
+				End If
+			End If
+		End If
+
+		nid = nc.GetNextNoteId(nid)
+	Next
+	If prohibitcnt > 0 Then
+		Call QuickSort(prohibit,"ASC")  ' Sortorder parameter V3.00
+	End If
+
+	If(prohibitcnt > 0) Then
+		For m = LBound(sortedarray) To UBound(sortedarray)
+			prohibitmess = prohibitmess & sortedarray(m) &  Chr(10)
+		Next
+		If Not removeprohibit Then
+			If msg Then
+				MessageBox "Prohibit design refresh is on for " & Chr(10) & prohibitmess,64,"Prohibit Design Refresh Report"
+			End If
+		Else
+			If msg Then
+				MessageBox "Prohibit design refresh removed for " & Chr(10) & prohibitmess,64,"Update Prohibit Design Refresh Report"
+			End If
+		End If
+	Else
+		If msg Then
+			MessageBox "No Prohibit Design Refresh elements found",64,"Prohibit Design Refresh Report"
+		End If
+	End If
+
+	If msg Then
+		Print Time$ & " : " & SETFIELDVER &	" Agent Ends OK Findprohibit Ends"
+	End If
+
+	Exit Sub
+
+objecttype:
+
+	eval = Evaluate(|@If(
+	@Text(@NoteID) = "NT000001DA"; "Help - About";
+	@Text(@NoteID) = "NT000001DE"; "Help - Using";
+	@IsAvailable($ACLDigest); "Access Control List";
+	@Contains($Flags; "sj"); "Script Library - JAVA";
+	@Contains($Flags; "s"); "Script Library";
+	@Contains($Flags; "h"); "Script Library - JS";
+	@Contains($Flags; "t"); "Database Script";
+	@Contains($Flags; "m"); "Outline";
+	@Contains($Flags; "k"); "Data Connection";
+	@Contains($Flags; "U"); "Subform";
+	@Contains($Flags; "#"); "Frameset";
+	@Contains($Flags; "i"); "Image Resource";
+	@Contains($Flags; "W"); "Page";
+	@Contains($Flags; "@"); "Applet";
+	@Contains($Flags; "="); "Style Sheet";
+	@Contains($Flags; "{"); "Web Service";
+	@Contains($Flags; "^"); "Shared Column";
+	@Contains($Flags; "g");
+	@If(@Contains($Flags; "`") ; "Theme"; @Contains($Flags; "K") ; "XPage"; @Contains($Flags; ";") ; "Custom Control";
+	@Contains($Flags; "~") ; "Hidden File Resource"; "Shared File");
+	@Contains($Flags; ":"); "Composite Application - Wiring Properties";
+	@Contains($Flags; "y"); "Shared Actions";
+	@Contains($Flags; "F"); "Folder";
+	@Contains($Flags; "G"); "Navigator";
+	@Contains($Flags; "z"); "DB2 Access View";
+	@Contains($Flags; "Y" : "d" : "T"); "View";
+	@Contains($Flags; "c"); "View - Calendar";
+	@Contains($Flags; "o"); "View - Spofu Desktop Stored";
+	@IsAvailable($AssistFlags); "Agent";
+	@IsAvailable($FIELDS); @If( $Fields=$Title;"Shared Field";"Form");
+	@Contains($Flags; "V"); " - Private";"")|, doc)
+
+	If(eval(0) = "") Then
+		eval = Evaluate(|@If(@IsAvailable($$FORMSCRIPT); "Form";
+		@IsAvailable($FormulaClass); "View";
+	     !@Matches($Flags; "*{UWy#i:||@Kgz}*"); "Form";
+		@IsAvailable($Operation); "Agent - R3 Macro";
+	     "*UNKNOWN*" + " (flags: " + $Flags + ")")|, doc)
+	End If
+
+	Return
+
+donnc:
+	Call nc.SelectAlldesignElements(True)
+	nc.SelectActions = True
+	nc.SelectAgents = True
+	nc.SelectDatabaseScript = True
+	nc.SelectFolders = False
+	nc.SelectForms = True
+	nc.SelectFrameSets = True
+	nc.SelectHelpAbout = False
+	nc.SelectHelpIndex = False
+	nc.SelectHelpUsing = False
+	nc.SelectIcon = False
+	nc.SelectImageResources = False
+	nc.SelectJavaResources = False
+	nc.SelectMiscCodeElements = False
+	nc.SelectMiscFormatElements = False
+	nc.SelectMiscIndexElements = False
+	nc.SelectNavigators = True
+	nc.SelectOutlines = True
+	nc.SelectPages = True
+	nc.SelectScriptLibraries = True
+	nc.SelectSharedFields = True
+	nc.SelectStyleSheetResources = False
+	nc.SelectSubforms = True
+	nc.SelectViews = True
+
+	Call nc.BuildCollection
+	Return
+
+End Sub
+Sub RunAgent
+	Dim dbagents As variant
+	Dim agentname As variant
+	
+	dbagents = getagents
+	agentname  = ws.Prompt( PROMPT_OKCANCELLIST, SETFIELDVER$ &" Agent selector", "Please select the appropriate agent" ,dbagents(0) , dbagents )
+	If IsEmpty(agentname) Then
+		MessageBox "Cancel pressed or no choice made,exiting",64,SETFIELDVER$ &" No Agent selected"
+		Exit Sub
+	End If	
+	Set agent = db.GetAgent(agentname)
+	agent.Run
+End Sub
+Sub NewField(doc As NotesDocument)
+	fieldname = newfieldname       ' V3.00 this is to give a meaningful print message at the termination of the code
+	While Not doc Is Nothing
+		If(listtype = "Single") Then
+			Select Case fieldtype
+				Case "Integer (Long)": 		Set item = doc.AppendItemValue( newfieldname, fieldvalueint )
+				Case "Floating Point" : Set item = doc.AppendItemValue(newfieldname, fieldvaluefp)
+				Case "Date":			Set item = doc.AppendItemValue( newfieldname, CDat(fieldvalue(0)))
+				Case "Rich Text"  : Set rtitem = doc.CreateRichTextItem( newfieldname)
+					                               rtitem.Appendtext(fieldvalue(0))
+				Case Else: 				Set item = doc.AppendItemValue( newfieldname, fieldvalue(0) )
+					Call checktype(doc)
+			End Select
+		Else
+			Select Case fieldtype
+			Case "Integer (Long)", "Floating Point":
+				ReDim tempdbl(UBound(fieldvalue))
+				For t = LBound(fieldvalue) To UBound(fieldvalue)
+					tempdbl(t) = CDbl(fieldvalue(t))
+				Next
+				Set item = doc.AppendItemValue( newfieldname,tempdbl)
+			Case "Date":			Set item = doc.AppendItemValue( newfieldname, CDat(fieldvalue(0)))
+				For t = LBound(fieldvalue)+1 To UBound(fieldvalue)
+					Call doc.ReplaceItemValue(newfieldname, ArrayAppend(item.Values,CDat(fieldvalue(t))))
+				Next
+			Case  "Rich Text" : MessageBox fieldtype & " Is not a valid field type for multi-value data.",16,"Exiting " & SETFIELDVER
+				Exit Sub
+			Case Else:				Set item = doc.AppendItemValue( newfieldname, fieldvalue)   ' TEXT
+				Call checktype(doc)
+		End Select
+		End If
+		Call doc.Save( True, True )
+		updcnt = updcnt + 1
+		If dc Is Nothing Then   ' V2.94 21/11/2014
+			Exit Sub
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+End Sub
+Function DominicSpy(doc As NotesDocument, formitems() As String, formvals() As String, formitemtypes() As String) As Long
+
+	Dim CW(2) As String
+	Dim NL As String
+	Dim htmlBeg  As String
+	Dim htmlEnd  As String
+	Dim headBeg  As String
+	Dim headEnd  As String
+	Dim bodyBeg  As String
+	Dim bodyEnd  As String
+	Dim tableEnd As String
+	Dim styles As String
+	Dim windowtitle As String
+	Dim ReportHeading As String
+	Dim ReportHeading2 As String
+	Dim TableTitles  As String
+	Dim TableRows As String
+	Dim fieldval As String
+	Dim HA As String
+	Dim FileContent As String
+	Dim path  As String
+	Dim filename As String
+	Dim tempdir As String
+	Dim TemplateName As String
+	Dim DesignTemplateName As String
+	Dim Reportheading3 As String
+	Dim Reportheading4 As String
+	Dim ReportHeading5 As String
+	Dim ReportHeading6 As String
+	Dim managers As String
+	Dim tempman As String
+	Dim ftmess As String
+	Dim noteid As String
+	Dim i As Long
+	Dim j As Long
+	dim filenum as integer
+	Dim dummy As Long
+	Dim x As Long
+	Dim y As Long
+	Dim managervar As Variant
+
+	'Widths of the table's columns (element 0 is column 1, etc).
+
+	CW(0) = "200"
+	CW(1) = "600"
+	CW(2) = "150"
+
+	'Line break for formatting the HTML text.
+	NL$ = Chr(13) + Chr(10)
+
+	'HTML stand-alone tags.
+	htmlBeg$ = "<html>" + NL$
+	htmlEnd$ = "</html>" + NL$
+	headBeg$ = "<head>" + NL$
+	headEnd$ = "</head>" + NL$
+	bodyBeg$ = "<body>" + NL$
+	bodyEnd$ = "</body>" + NL$
+	tableEnd$ = "</table>" + NL$
+
+	'HTML styles.
+	Styles$ = "<style>" + NL$ + _
+	"body {font-family:" & ARIAL &";font-size:" + FS1$ + "pt}" + NL$ + _
+	"h2 {font-family:" & ARIAL &";font-size:" + FS2$ + "pt}" + NL$ + _
+	"td {font-family:" & ARIAL &";font-size:" + FS1$ + "pt}" + NL$ + _
+	"</style>" + NL$
+
+	'Window's title.
+	WindowTitle$ = "<title>Dominic Spy </title>" + NL$
+
+	'Report's heading.
+	Dim sn As New NotesName(db.server)
+
+	'	TemplateName Property
+	'	Read-only. The template Name of a database, If the database Is a template. If the database Is Not a template, returns an empty String ("").
+	'	To Get: name$ = notesDatabase.TemplateName
+
+	'	DesignTemplateName Property
+	'	Read-only. The Name of the design template From which a database inherits its design. If the database does Not inherit its design From a design template, it returns an empty String ("").
+	'	To Get: name$ = notesDatabase.DesignTemplateName
+
+	TemplateName = db.TemplateName
+	DesignTemplateName = db.DesignTemplateName
+
+	managervar = db.Managers
+	' Make all the names Abbreviated because they are a mixture of punters, groups, wildcards etc
+	For x = LBound(managervar) To UBound(managervar)
+		Dim nnm As New NotesName(managervar(x))
+		managervar(x)= nnm.abbreviated
+	Next
+
+	Call quicksort(managervar,"ASC")  ' Sortorder parameter V3.00
+	managervar = sortedarray  ' Global
+
+	managers = "Database Managers (" & CStr(UBound(managervar)+1) & ") : "
+	For m = LBound(managervar) To UBound(managervar)
+		managers = managers & managervar(m) & " . . "
+	Next
+
+	Call findprohibit(False,False)   '  Find any prohibit Design Refresh Set fisrt param to to True if we ever allow removal
+	prohibitmess = "Design Prohibit Refresh on For : "
+	If prohibitcnt > 0 Then
+		For m = LBound(sortedarray) To UBound(sortedarray)
+			prohibitmess = prohibitmess & sortedarray(m) & " . . "
+		Next
+	End If
+
+	Dim dc As	NotesDocumentCollection
+	Set dc = db.AllDocuments
+
+	ftmess = " Database IS "
+	If Not db.IsFTindexed Then
+		ftmess = ftmess &  "NOT "
+	End If
+	ftmess = ftmess &  "Full-Text Indexed"
+
+	noteid = "NT" & UString$ ( 8 - Len(doc.Noteid) , "0") & doc.Noteid     ' For some reason the Noteid property does not get returned in the NT00000NNN format that it is normally represented by 
+
+	ReportHeading = "<h4>" & db.title + "  _ "  + sn.abbreviated + "!!" & db.Filepath &"  _ "  & "Database size : " & Format$((db.size/1024/1024),"Fixed" ) & " (MB)" & "</h4>" + NL
+	ReportHeading2 = "<b>" +" Document UNID : " + doc.Universalid & " Note ID : " & noteid & " Document size : " + CStr(doc.size)& ". Total docs in database : " & CStr(dc.count) & ". " & ftmess & "</b>"
+	If templatename <> "" Then
+		ReportHeading3 = "<b> This database is a template named : " & templatename & "</b>"
+	Else
+		ReportHeading3 = "<b> This database inherits from a template named : " & DesignTemplateName & "</b>"
+	End If
+	ReportHeading4 = "<b>" & managers &"</b>"
+	ReportHeading5 = "<b>" & prohibitmess &"</b>"
+	ReportHeading6 = "<b>" & Format(Now,"DD/MM/YYYY hh:nn:ss")&"</b>"
+
+	' the table's titles.
+	TableTitles$ = _
+	"<table cellpadding=""2"" cellspacing=""0"" border=""1"" bordercolorlight=""#000000"" bordercolordark=""#000000"">" + NL$ + _
+	"<tr bgcolor=""" + BC$ + """>" + NL$ + _
+	"<td width=""" + CW$(0) + """ valign=""top"" rowspan=""2"" align=""center""><b>Field Name</b></td>" + NL$ + _
+	"<td width=""" + CW$(1) + """ valign=""top"" rowspan=""2"" align=""center""><b>Field Value</b></td>" + NL$ + _
+	"<td width=""" + CW$(2) + """ valign=""top"" rowspan=""2"" align=""center""><b>Field Type</b></td>" + NL$ + _
+	"</tr>" + NL$
+
+	HA$ = ""
+	'	HA$ = " align=""center"""
+	TableRows = ""
+	TableRows = TableRows + "<tr>" + NL
+	For i = LBound(formitems)  To UBound(formitems)
+
+		Select Case formitemtypes(i)
+		Case "AUTHORS" : TableRows = TableRows + "<tr bgcolor=""" + AUTHORSCOL$ + """>" + NL
+		Case "READERS" : TableRows = TableRows + "<tr bgcolor=""" + READERSCOL$ + """>" + NL
+		Case "NAMES" : TableRows = TableRows + "<tr bgcolor=""" + NAMESCOL$ + """>" + NL
+		Case Else: TableRows = TableRows + "<tr>" + NL
+	End Select
+
+		'		TableRows = TableRows + "<tr>" + NL
+		For j = 0 To 2
+			Select Case j
+			Case 0: FieldVal = formitems(i)
+			Case 1: FieldVal = formvals(i)
+			Case 2: FieldVal = formitemtypes(i)
+		End Select
+
+			If (fieldval = "") Then       ' Avoid empty cells looking a bit rubbish
+				fieldval = "~ NO VALUE ASSIGNED ~"
+			End If
+			TableRows = TableRows + _
+			"<td width=""" + CW$(j) + """ valign=""top""" + HA$ + ">" + FieldVal + "</td>" + NL$
+		Next
+		TableRows$ = TableRows$ + "</tr>" + NL$
+	Next
+
+	'Create the HTML file content.
+	FileContent = _
+	htmlBeg$ + _
+	headBeg$ + _
+	Styles$ + WindowTitle$ + _
+	headEnd$ + _
+	bodyBeg$ + _
+	ReportHeading$ + _
+	ReportHeading2 + "<BR>" + _
+	ReportHeading3 + "<BR>" + _
+	ReportHeading4 +  "<BR>" + _
+	ReportHeading5 +  "<BR>" + _
+	ReportHeading6 + _
+	TableTitles$ + TableRows$ + tableEnd$ + _
+	bodyEnd$ + _
+	htmlEnd$
+
+	' FIND CORRECT LOCAL PROFILE DIR
+	tempdir=Environ("Temp")
+	If tempdir="" Then
+		tempdir=Environ("Tmp")
+		If tempdir=""  Then
+			tempdir = "D:"   ' Nothing found so use the D root
+		End If
+	End If
+
+	FileName = tempdir & "\" & db.title & "_" & "DominicSpy.html"    ' A Bit of megalomania here I guess
+	FileNum = FreeFile()
+	Open FileName For Output As FileNum
+
+	Print # FileNum, FileContent
+
+	Close #FileNum
+	Print Time$ & " : " & SETFIELDVER & " Agent ended OK - wrote all fields to browser window"
+	dummy = Shell(BROWSERPATH$ + " " + FileName,1)
+
+End Function
+Sub UniqueTextField(doc As NotesDocument)
+	Dim uniquearr As Variant
+	Set sourceitem = doc.getfirstitem(fieldname)
+	itemtype = sourceitem.type
+	If(finditemtype <> "AUTHORS"  And  finditemtype <> "READERS"  And  finditemtype <> "NAMES" And  finditemtype <> "TEXT"  ) Then
+		MessageBox "The field you are trying to unique is of type " & finditemtype & " . I can only unique fields that are textual",16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+	fieldtype = StrConv ( finditemtype , 3 )  ' DONT RELY ON THE USER GETTING THIS TYPE CORRECT
+
+While Not doc Is Nothing
+	Set sourceitem = doc.getfirstitem(fieldname)
+	uniquearr = ArrayUnique(sourceitem.values,0) ' CONSERVATIVELY CASE AND PITCH MUST MATCH
+	Set item = doc.ReplaceItemValue( fieldname,uniquearr)
+	Call checktype(doc)                          ' THIS RESTORES AUTHORS,NAMES, READERS IF SET CORRECTLY BY THE USER
+	Call doc.Save( True, True )
+	updcnt = updcnt + 1
+	If dc Is Nothing Then
+		Exit Sub
+	End If
+	Set doc = dc.getnextdocument(doc)
+Wend
+
+End Sub
+
+Sub DeleteProfile
+	Dim profdc As NotesDocumentCollection
+	Dim doc As NotesDocument
+	Dim forms() As String
+	Dim i As Long
+	Dim iChoice As Long
+	Dim x As Variant
+	Dim profile As Variant
+
+retry:
+	If Not dbdeleteaccess Then
+		'   3 		Abort 		IDABORT
+		'	4 		Retry 		IDRETRY
+		'	5 		Ignore 	IDIGNORE
+		iChoice = MessageBox ("Testing the ACL suggests that you do not have Delete access on this database ACL", 18, "ACL Test " & SETFIELDVER)
+		Select Case iChoice
+		Case 3 : Print Time$ & " : " & SETFIELDVER & " Exiting"
+			Exit Sub
+		Case 4 : Print Time$ & " : " & SETFIELDVER & " Retrying"
+			GoTo retry
+		Case 5 : Print Time$ & " : " & SETFIELDVER & " Ignoring"
+	End Select
+	End If
+
+	Set profdc = db.GetProfileDocCollection
+	If(profdc.count > 0) Then
+		i = 0
+		ReDim forms(i)
+		Set doc = profdc.getfirstdocument
+		While Not doc Is Nothing
+			If(doc.form(0) = "") Then
+				x = ArrayGetIndex(forms, doc.nameofprofile,5)
+			Else
+				x = ArrayGetIndex(forms,doc.form(0),5)
+			End If
+
+				If IsNull(x)  Then
+					ReDim Preserve forms(i)
+					If(doc.form(0) = "") Then
+						forms(i) = doc.nameofprofile
+					Else
+						forms(i) = doc.form(0)
+					End If
+					i = i + 1
+				End If
+			Set doc = profdc.getnextdocument(doc)
+		Wend
+
+		Call quicksort(forms,"ASC")  ' Sortorder parameter V3.00
+
+		profile = ws.Prompt( PROMPT_OKCANCELLIST, SETFIELDVER$ &" Profile Document Dialog", "Choose the profile to delete",sortedarray(0), sortedarray )
+		If Not IsEmpty(profile) Then                         ' Cancel or escape pressed
+			Set doc = db.getprofiledocument(profile)
+			If Not doc Is Nothing Then
+				If doc.RemovePermanently(True) Then
+					Print Time$ & " : " & SETFIELDVER & " Agent ended OK, Profile document " & profile & " deleted"
+				Else
+					Print Time$ & " : " & SETFIELDVER & "  Some problem deleting Profile document " & profile
+				End If
+			Else
+				Print Time$ & " : " & SETFIELDVER & " Profile document " & profile & " unable to be accessed in the usual way"
+			End If
+		End If
+
+	Else ' No profiles found
+		MessageBox "Sorry, no profiles found",16,SETFIELDVER$ & " Profile Document Result"
+		Return
+	End If
+
+End Sub
+Function CombSort(arr() As String, sortorder As String) As Variant
+	Dim temp As String	
+	Dim swapped As Integer
+	Dim i As Long
+	Dim j As Long
+	Dim gap As Long
+	Dim upper As Long
+	
+	swapped = 1
+	upper = UBound(arr)
+	gap = upper + 1            ' Upper bound is the actual number unlike C
+	
+	While (gap > 1 Or swapped = 1)
+		gap = Fix(gap * 10 / 13)
+		If (gap = 9 Or gap = 10) Then
+			gap = 11
+		End If
+		If (gap < 1) Then
+			gap = 1
+		End If
+		swapped = 0
+		i = 0
+		j = gap
+		While  j < upper + 1     ' Upper bound is the actual number unlike C
+			
+			If UCase(sortorder) = "DESC" Then
+				If (arr(i) < arr(j)) Then   ' DESC
+					GoSub swap
+				End if
+			Else
+				If (arr(i) > arr(j)) Then    ' ASC
+					GoSub swap
+				End if
+			End If
+			i = i +1
+			j = j + 1
+		Wend
+	Wend
+	
+	CombSort = arr
+Exit Function
+swap:
+	temp = arr(i)
+	arr(i) = arr(j)
+	arr(j) = temp
+	swapped = 1
+return
+End Function
+Function Security As String
+' SECURITY TEST THAT LOOKS UP A LOOKUP ITEM ON THE APPROPRIATE LOOKUP.NSF WITH THE KEY "MISCSETFIELD"	 DJS 10/08/2012
+	security = "YES"
+	If(db.Server <> "") Then     ' DO NOT TEST IF LOCAL
+		Set lookupdb = New NotesDatabase(db.Server,LOOKUP)
+		If(lookupdb Is Nothing) Then
+			MessageBox "Error in finding the " & LOOKUP & " for server " & db.Server,16,"Exiting " & SETFIELDVER
+			Exit Function
+		End If
+		Set lookupview = lookupdb.GetView(LOOKUPVIEWALIAS)
+		Set lookupdoc = lookupview.GetDocumentByKey( LOOKUPKEY,True)
+		If(lookupdoc Is Nothing) Then
+			MessageBox "You do not have high enough permissions to run this agent, please speak to a Notes Developer about this.",16,"Exiting " & SETFIELDVER
+			security = "NO"
+			Exit Function
+		End If
+	End If
+End Function
+Function GetAgents As variant
+Dim ia As Integer
+
+	ia = 0
+	ReDim agentlist(ia) 
+	ForAll a In db.Agents
+		Set agent = a
+		ReDim Preserve agentlist(ia)
+		agentlist(ia) = agent.name
+		ia = ia + 1
+	End ForAll
+	
+	Call quicksort(agentlist,"ASC")
+	getagents = sortedarray
+
+End Function
+
+Sub ChangeFieldType(doc As NotesDocument)
+	choice = MessageBox("This will set " & fieldname & " to type " & fieldtype & " But will not change value", 36, SETFIELDVER & " Happy with this? " )
+	If(choice = 7) Then
+		MessageBox "Aborting As Requested",16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+	While Not doc Is Nothing
+		Set item = doc.GetFirstItem(fieldname)
+		Call checktype(doc)
+		Call doc.Save( True, True )
+		updcnt = updcnt + 1
+		If dc Is Nothing Then   ' V2.94 21/11/2014
+			Exit Sub
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+End Sub
+Sub QuickSortMain( sA() As String, bottom As Long, top As Long )
+     ' Called by QuickSort
+     ' Uses Public variable sA  (array of string)
+	Dim length As Long
+	Dim i As Long
+	Dim j As Long
+	Dim Pivot As Long
+	Dim PivotValue As String
+	Dim t As String
+	Dim LastSmall As Long
+	length = top - bottom + 1
+
+     ' Only do the QuickSort if the sublist is at least 10 items long
+	If length > 10 Then
+          ' Pivot is chosen approx. halfway through sublist.
+          ' This gives us best speed if list is almost sorted already, and is no worse than any
+          ' other choice if the list is in random order.
+		Pivot = bottom + (length \ 2)
+
+          ' Move PivotValue out of the way
+		PivotValue = sA( Pivot )
+		sA ( Pivot ) = sA ( bottom )
+		sA ( bottom ) = PivotValue
+
+          ' LastSmall is the location of the last value smaller than PivotValue
+		LastSmall = bottom
+		For i = bottom + 1 To top
+			If sA ( i ) < PivotValue Then
+				LastSmall = LastSmall + 1
+				t = sA ( i )
+				sA ( i ) = sA ( LastSmall )
+				sA ( LastSmall ) = t
+			End If
+		Next
+
+          ' Move the PivotValue back
+		t = sA ( LastSmall )
+		sA ( LastSmall ) = sA ( bottom )
+		sA ( bottom ) = t
+		Pivot = LastSmall
+
+          ' Now sort each side
+		Call QuickSortMain ( sA, bottom, Pivot - 1 )
+		Call QuickSortMain ( sA, Pivot + 1, top )
+	End If
+
+End Sub
+Sub ReleaseNotesLock(doc As NotesDocument)
+' In V3.11 allowed processing multiple docs
+' In V3.17 entire sub reworked to use the array lockfields
+' THE FIELDS THAT SIGNIFY INTERNAL NOTES LOCKING HAS BEEN LEFT ON ARE
+' $Writers
+' $Writersdate
+' $PTWriters
+' $PWriters   Added at V3.17
+	Dim lockfields(3) As String 
+   	Dim v As Long
+   	Dim w As Integer
+' For explanation of these values See http://techlab.ytria.com/3853/lotus-notes-articles/close-inspection-ibm-notes-document-locking-architecture-scanez/
+	lockfields(0) = "$Writers"
+	lockfields(1) = "$Writersdate"
+	lockfields(2) = "$PTWriters"
+	lockfields(3) = "$PWriters"       ' V3.17
+
+	While Not doc Is Nothing
+		v = 0
+		For w = LBound(lockfields) To uBound(lockfields)
+			Set item = doc.GetFirstItem(lockfields(w))
+			If item Is Nothing Then
+				Print Time$ & " : " & SETFIELDVER & " Cannot locate locking field " & lockfields(w)
+			Else
+				Call item.Remove
+				v = v + 1
+			End If
+		Next
+		
+	    If v > 0 Then
+			Call doc.Save( True, True )
+			updcnt = updcnt + 1
+			Print Time$ & " : " & SETFIELDVER & " Removed locking fields $Writers/$WritersDate/$PTWriters/$PWriters"
+		End If
+
+		If dc Is Nothing Then
+			Exit Sub
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+
+End Sub
+Sub RefreshAll(doc As NotesDocument)
+	Dim success As Variant
+	While Not doc Is Nothing
+		success = doc.ComputeWithForm( False, False )
+		If success Then
+			Call doc.Save( True, True )
+			updcnt = updcnt + 1
+		End If
+		If dc Is Nothing Then   ' V2.94 21/11/2014
+			Exit Sub
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+	Print Time$ & " : " & SETFIELDVER & " Agent ended OK - refreshed " & CStr(updcnt)
+End Sub
+Function FindItemType
+	Select Case itemtype
+		Case 1084 : itemdesc = "ATTACHMENT"
+		Case 1076 : itemdesc = "AUTHORS"
+		Case 1024 : itemdesc = "DATETIMES"
+		Case 1454 : itemdesc = "EMBED_ATTACHMENT"
+		Case 1453 : itemdesc = "EMBED_OBJECT"
+		Case 1452 : itemdesc = "EMBED_OBJECTLINK"
+		Case 1090 : itemdesc = "EMBEDDEDOBJECT"
+		Case 256 : itemdesc = "ERRORITEM"
+		Case 1536 : itemdesc = "FORMULA"
+		Case 21 : itemdesc = "HTML"
+		Case 6 : itemdesc = "ICON"
+		Case 1074 : itemdesc = "NAMES"
+		Case 7 : itemdesc = "NOTELINKS"
+		Case 4 : itemdesc = "NOTEREFS"
+		Case 768 : itemdesc = "NUMBERS"
+		Case 1085 : itemdesc = "OTHEROBJECT"
+		Case 1075 : itemdesc = "READERS"
+		Case 1 : itemdesc = "RICHTEXT"
+		Case 8 : itemdesc = "SIGNATURE"
+		Case 1280 : itemdesc = "TEXT"
+		Case 512 : itemdesc = "UNAVAILABLE"
+		Case 0 : itemdesc = "UNKNOWN"
+		Case 14 : itemdesc = "USERDATA"
+		Case 1792 : itemdesc = "USERID"
+	End Select
+	finditemtype = itemdesc
+End Function
+Function DBQueryAccess As Long
+%REM  V3.24 
+   Call this function and check each privilege bit to see if it is on
+	If (DBQueryAccess And DBACL_CREATE_DOCUMENTS) > 0 Then
+	If (DBQueryAccess And DBACL_DELETE_DOCUMENTS) > 0 Then
+	If (DBQueryAccess And DBACL_CREATE_PRIV_AGENTS) > 0 Then
+	If (DBQueryAccess And DBACL_CREATE_PRIV_FOLDERS_VIEWS) > 0 Then
+	If (DBQueryAccess And DBACL_CREATE_SHARED_FOLDERS_VIEWS) > 0 Then
+	If (DBQueryAccess And DBACL_CREATE_SCRIPT_AGENTS) > 0 Then
+	If (DBQueryAccess And DBACL_READ_PUBLIC_DOCUMENTS) > 0 Then
+	If (DBQueryAccess And DBACL_WRITE_PUBLIC_DOCUMENTS) > 0 Then
+	If (DBQueryAccess And DBACL_REPLICATE_COPY_DOCUMENTS) > 0 Then
+%END REM
+	DBQueryAccess = db.QueryAccessPrivileges(sess.UserName)
+End Function
+Sub ImportViewDXL
+	Dim uidb As NotesUIDatabase
+	Dim stream As NotesStream
+	Dim importer As NotesDXLImporter
+	Dim dataDir As String
+	Dim fileName As Variant
+           
+	Set uidb = ws.CurrentDatabase
+	dataDir = sess.GetEnvironmentString("Directory", True)
+	fileName = ws.OpenFileDialog(False, "Choose Source File", "DXL Files|*.dxl", dataDir)
+	If IsEmpty(fileName) Then 
+		Exit Sub
+	End if
+	Set stream = sess.CreateStream
+	If Not stream.Open(fileName(0)) Then
+		Exit Sub
+	End if
+	Set importer = sess.CreateDXLImporter(stream, db)
+	importer.DesignImportOption = DXLIMPORTOPTION_CREATE
+	Call importer.Process
+	Print Time$ & " : " & SETFIELDVER & " Agent ended OK - Imported View DXL from " & fileName(0)
+	Call uidb.Close
+End Sub
+Sub DeleteField(doc As NotesDocument)
+	Choice = MessageBox ("Continuing will delete the field " & fieldname & ", is this OK", 36,  "Confirmation of deletion " & SETFIELDVER)
+	If(choice = 7) Then
+		MessageBox "Aborting As Requested",16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+	While Not doc Is Nothing
+		Set item = doc.GetFirstItem(fieldname)
+		If Not item Is Nothing Then    ' V3.11 - spotted after V3.11 rolled out - in place ready for V3.12
+			Call item.Remove
+			Call doc.Save( True, True )
+			updcnt = updcnt + 1
+		End If
+		If dc Is Nothing Then   ' V2.94 21/11/2014
+			Exit Sub
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+End Sub
+Sub MakeResponse(doc As NotesDocument)
+	Dim parentdoc As NotesDocument
+	Dim respdoc As NotesDocument
+	Dim nn As NotesName
+	Dim prompttext As String
+	Dim reply As Variant
+
+	If dc Is Nothing Then
+		MessageBox "Error you must have exactly two documents selected at the view level, Make Response is not a UIDoc tool",16,"Exiting " & SETFIELDVER
+		Exit Sub
+
+	End If
+	If dc.count <> 2 Then
+		MessageBox "Error you must have exactly two documents selected",16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+
+	Set parentdoc = doc
+	Set respdoc = dc.getnextdocument(doc)
+
+	Set nn = New NotesName(parentdoc.Authors(0))
+	prompttext = "The first document in the collection " & parentdoc.subject(0) & " was created " & parentdoc.created & " by " & nn.common _
+	 & ". If you want this to be the Parent click Yes, if you want it to be the Response click No, if you don't know what you are doing click Cancel."
+
+	reply = ws.Prompt(PROMPT_YESNOCANCEL, SETFIELDVER$ &" Response Document Dialog",	prompttext)
+
+	Select Case reply
+		Case 1 : 	Call respdoc.MakeResponse(parentdoc)
+					respdoc.save False, False
+					Set nn = New NotesName(respdoc.Authors(0))
+					Print Time$ & " : " & SETFIELDVER & " Made document Created By " & nn.common & " on " respdoc.created & " A response"
+					updcnt = updcnt + 1
+		Case 0 :	Call parentdoc.MakeResponse(respdoc)
+					parentdoc.save False, False
+					Print Time$ & " : " & SETFIELDVER & " Made document Created By " & nn.common & " on " parentdoc.created & " A response"
+					updcnt = updcnt + 1
+		Case Else :	Print Time$ & " : " & SETFIELDVER & " Cancel Pressed"
+	End Select
+End Sub
+Sub RemoveObsoleteERMS(doc As NotesDocument)
+	Dim obsoletefield(44) As String
+	Dim v As Long
+	Dim w As Long
+ 	v = 0
+
+	obsoletefield(0) = "auditlog"
+	obsoletefield(1) = "autodeclare"
+	obsoletefield(2) = "deleteflag"
+	obsoletefield(3) = "ermsdelayedflag"
+	obsoletefield(4) = "ermsdeleteversion"
+	obsoletefield(5) = "ermsrecordfunctiontype"
+	obsoletefield(6) = "ermsrecordsubtype"
+	obsoletefield(7) = "ermsrecordtype"
+	obsoletefield(8) = "ermsreviewdate"
+	obsoletefield(9) = "ermsreviewedby"
+	obsoletefield(10) = "ermsreviewstatus"
+	obsoletefield(11) = "ermssourcebdbpath"
+	obsoletefield(12) = "ermssourcebdbtitle"
+	obsoletefield(13) = "ermstransferdate"
+	obsoletefield(14) = "ermsundeclarepending"
+	obsoletefield(15) = "isresponse"
+	obsoletefield(16) = "kpauthors"
+	obsoletefield(17) = "kpclienttype"
+	obsoletefield(18) = "kpdeclaredatelocal"
+	obsoletefield(19) = "kpdeclareddate"
+	obsoletefield(20) = "kpdelflag"
+	obsoletefield(21) = "kpdocstatus"
+	obsoletefield(22) = "kpdocstoreid"
+	obsoletefield(23) = "kpdocumentkey"
+	obsoletefield(24) = "kpfolderdocnum"
+	obsoletefield(25) = "kpfolderid"
+	obsoletefield(26) = "kpfullfoldername"
+	obsoletefield(27) = "kpfullfoldernumber"
+	obsoletefield(28) = "kplocalprocess"
+	obsoletefield(29) = "kporgform"
+	obsoletefield(30) = "kpowner"
+	obsoletefield(31) = "kprecordid"
+	obsoletefield(32) = "kpsamenddate"
+	obsoletefield(33) = "kpsavedstatus"
+	obsoletefield(34) = "kpsaveoptionsset"
+	obsoletefield(35) = "kpsdatecreated"
+	obsoletefield(36) = "kpsdelflag"
+	obsoletefield(37) = "kpsdocclass"
+	obsoletefield(38) = "kpsdoctitle"
+	obsoletefield(39) = "kpsdoctitlesecure"
+	obsoletefield(40) = "kpselectedfolder"
+	obsoletefield(41) = "kpsnotdocument"
+	obsoletefield(42) = "kpsselectedfolder"
+	obsoletefield(43) = "ermssourcebdbttle"                ' unnoticed spelling mistake in the old system
+	obsoletefield(44) = "ermsreviewedbydate" 
+	
+
+	While Not doc Is Nothing
+		v = 0
+		For w = LBound(obsoletefield) To UBound(obsoletefield)
+			Set item = doc.GetFirstItem(obsoletefield(w))
+			If item Is Nothing Then
+				Print Time$ &" :" & SETFIELDVER &" Cannot locate field " & obsoletefield(w)
+			Else
+				Call item.Remove
+				v = v + 1
+			End If
+		Next
+
+		If v > 0 Then
+			Call doc.Save( True, True )
+			updcnt = updcnt + 1
+		End If
+
+		If dc Is Nothing Then
+			Exit Sub
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+
+End Sub
+Sub Heapify(pavIn As Variant,piCount As Integer,sortorder As String)
+	Dim liStart As Integer
+	liStart = (piCount - 2) / 2
+	While liStart >=0
+		If sortorder = "ASC" Then
+			heapsiftDown pavIn, liStart, piCount -1
+		Else
+			heapsiftUp pavIn, liStart, piCount -1
+		End If
+		liStart = liStart - 1
+	Wend
+End Sub
+Sub CopyDocs(targetserver As String,targetdbpath As String,doc As NotesDocument)
+	Dim interval As Long
+	
+	Dim start As New NotesDateTime(Now)
+	Dim targetdb As New NotesDatabase(targetserver,targetdbpath)
+	If targetdb Is Nothing Then
+		MessageBox "Cannot find " & targetserver & "!!" & targetdbpath ,16,"Exiting " & SETFIELDVER
+		Exit Sub
+	End If
+	
+	interval = dc.count/10
+	If interval = 0 Then     ' V021 12/04/2016 prevent possible zero-divide when less than 5 docs selected
+		interval = 1      
+	End If
+	Print Time$ & " : " & SETFIELDVER & " Copying " & CStr(dc.count) & " Documents to " & targetdb.Title
+	
+	While Not doc Is Nothing
+		Call doc.CopyToDatabase(targetdb)
+		updcnt = updcnt + 1
+		If dc Is Nothing Then
+			Exit Sub
+		End If
+		If updcnt Mod interval = 0 Then
+			Dim timenow As New NotesDateTime(Now)
+			Print Time$ & " : " & SETFIELDVER & " Copied " & CStr(updcnt) & " of " & CStr(dc.count) & " Total Documents to " & targetdb.Title & " " & cstr(Cint(updcnt/dc.count*100)) & "% Done in " & timenow.TimeDifference(start) & " seconds"
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+	
+	deselect
+	
+	Call ws.OpenDatabase(targetserver, targetdbpath)
+	Print Time$ & " : " & SETFIELDVER & " Agent ended OK - Copied " & CStr(updcnt) & " of " & CStr(dc.count) & " Total Documents to " & targetdb.Title & " in " & timenow.TimeDifference(start) & " seconds"
+
+End Sub
+Sub DesignElements
+	Dim nc As NotesNoteCollection
+	Dim ndbd As NotesDbDirectory
+	Dim doc As NotesDocument
+	Dim form As NotesForm
+	Dim designelement() As String
+	Dim nid As String
+	Dim designelementmess As String
+	Dim Title As String
+	Dim Flags As String
+	Dim oldFlags As String
+	Dim runmode As String
+	Dim i As Long
+	Dim Alter As Long
+	Dim cnt As Long
+	Dim examine As Long
+	Dim designelementcnt  As Long
+	Dim updelement As Long
+	Dim problemcnt As Long
+	Dim fieldcnt As Long
+	Dim fieldtot As Long
+	Dim eval As Variant
+	Dim designelementvar As Variant
+
+	examine = 0
+	updelement = 0
+	problemcnt = 0
+	designelementcnt = 0
+	fieldtot = 0
+
+	Set nc = db.CreateNoteCollection(False)  ' Handle on target db
+	GoSub donnc
+	nid = nc.GetFirstNoteId
+	For i = 1 To nc.Count                                                               ' Find on target db
+	Set doc = db.GetDocumentByID(nid)
+		flags = doc.GetItemValue("$Flags")(0)                          ' Looks mad but works
+		title = doc.GetItemValue("$Title")(0)
+
+		If title <> ""  Then   ' mysterious empty objects are returned
+' Match protected elements except folders that are named *(*)
+			Alter = False
+			If Flags Like "*P*F*" Then ' protected folder
+				If Title Like "(*)" Then ' not a user folder
+					Alter = True
+				End If
+			ElseIf Flags Like "*P*" Then
+				Alter = True
+			End If
+
+			GoSub objecttype
+			ReDim Preserve designelement(designelementcnt)
+			designelement(designelementcnt) = eval(0) & " ~ " & title
+			If Alter Then
+				designelement(designelementcnt) = designelement(designelementcnt) & " (**Prohibit Refresh is ON**)"
+			End If
+			
+			If eval(0) = "Form"  Then
+				fieldcnt = 0
+				Set form = db.GetForm(title)
+				If Not form Is Nothing then
+					ForAll Field In form.Fields
+						fieldcnt = fieldcnt + 1
+						fieldtot = fieldtot + 1
+					End ForAll
+				End if
+				designelement(designelementcnt) = designelement(designelementcnt) & "  (" & CStr(fieldcnt) & " Fields)"
+			End If
+
+			designelementcnt = designelementcnt + 1			
+			
+		End If
+
+		nid = nc.GetNextNoteId(nid)
+	Next
+
+	ReDim Preserve designelement(designelementcnt)
+	designelement(designelementcnt) = "Form_Fields_Total ~ " & CStr(fieldtot)
+
+	Call QuickSort(designelement,"ASC")  ' Sortorder parameter V3.00
+	designelementvar = sortedarray  ' Sortedarray is a global
+	Call designelementrep(designelementvar)
+
+Exit Sub
+
+objecttype:
+
+	eval = Evaluate(|@If(
+	@Text(@NoteID) = "NT000001DA"; "Help - About";
+	@Text(@NoteID) = "NT000001DE"; "Help - Using";
+	@IsAvailable($ACLDigest); "Access Control List";
+	@Contains($Flags; "sj"); "Script Library - JAVA";
+	@Contains($Flags; "s"); "Script Library";
+	@Contains($Flags; "h"); "Script Library - JS";
+	@Contains($Flags; "t"); "Database Script";
+	@Contains($Flags; "m"); "Outline";
+	@Contains($Flags; "k"); "Data Connection";
+	@Contains($Flags; "U"); "Subform";
+	@Contains($Flags; "#"); "Frameset";
+	@Contains($Flags; "i"); "Image Resource";
+	@Contains($Flags; "W"); "Page";
+	@Contains($Flags; "@"); "Applet";
+	@Contains($Flags; "="); "Style Sheet";
+	@Contains($Flags; "{"); "Web Service";
+	@Contains($Flags; "^"); "Shared Column";
+	@Contains($Flags; "g");
+	@If(@Contains($Flags; "`") ; "Theme"; @Contains($Flags; "K") ; "XPage"; @Contains($Flags; ";") ; "Custom Control";
+	@Contains($Flags; "~") ; "Hidden File Resource"; "Shared File");
+	@Contains($Flags; ":"); "Composite Application - Wiring Properties";
+	@Contains($Flags; "y"); "Shared Actions";
+	@Contains($Flags; "F"); "Folder";
+	@Contains($Flags; "G"); "Navigator";
+	@Contains($Flags; "z"); "DB2 Access View";
+	@Contains($Flags; "Y" : "d" : "T"); "View";
+	@Contains($Flags; "c"); "View - Calendar";
+	@Contains($Flags; "o"); "View - Spofu Desktop Stored";
+	@IsAvailable($AssistFlags); "Agent";
+	@IsAvailable($FIELDS); @If( $Fields=$Title;"Shared Field";"Form");
+	@Contains($Flags; "V"); " - Private";"")|, doc)
+
+	If(eval(0) = "") Then
+		eval = Evaluate(|@If(@IsAvailable($$FORMSCRIPT); "Form";
+		@IsAvailable($FormulaClass); "View";
+	     !@Matches($Flags; "*{UWy#i:||@Kgz}*"); "Form";
+		@IsAvailable($Operation); "Agent - R3 Macro";
+	     "*UNKNOWN*" + " (flags: " + $Flags + ")")|, doc)
+	End If
+
+	Return
+
+donnc:
+	Call nc.SelectAlldesignElements(True)
+	nc.SelectActions = True
+	nc.SelectAgents = True
+	nc.SelectDatabaseScript = True
+	nc.SelectFolders = True
+	nc.SelectForms = True
+	nc.SelectFrameSets = True
+	nc.SelectIcon = True
+	nc.SelectImageResources = True
+	nc.SelectNavigators = True
+	nc.SelectOutlines = True
+	nc.SelectPages = True
+	nc.SelectScriptLibraries = True
+	nc.SelectSharedFields = True
+	nc.SelectStyleSheetResources = True
+	nc.SelectSubforms = True
+	nc.SelectViews = True
+
+	nc.SelectHelpAbout = False
+	nc.SelectHelpIndex = False
+	nc.SelectHelpUsing = False
+	nc.SelectJavaResources = False
+	nc.SelectMiscCodeElements = False
+	nc.SelectMiscFormatElements = False
+	nc.SelectMiscIndexElements = False
+
+	Call nc.BuildCollection
+	Return
+
+End Sub
+Sub FindReplaceSubstring(doc As NotesDocument)
+	' Prompt using values of the selected field, ignore Single/Multi field, always figure that out as and when
+	Const INTERFACE$ = " Find/Replace Substring "
+	Dim docitem As NotesItem
+	Dim holdvals() As String
+	Dim findstring As String
+	Dim replacestring As String
+	Dim dccount As Long
+	Dim w As Long
+	Dim y As Long
+	Dim z As Long
+	Dim s As Long
+	Dim changed As Long
+	Dim arresult As Variant
+
+	If dc Is Nothing Then
+		dccount = 1
+	Else
+		dccount = dc.count
+	End If
+
+	GoSub getholdvals   ' Have to do it with strings
+
+	findstring = InputBox$("Input string to find in field " & fieldname, SETFIELDVER & INTERFACE$ & CStr(dccount) & " selected", "")
+	If findstring = "" Then
+	MessageBox "Cancelling as requested",64,SETFIELDVER &  INTERFACE$
+		Exit Sub
+	End If
+
+	replacestring = InputBox$("Input value you want to replace " & findstring & " with in field " & fieldname & ". Enter NOTHING to mean empty string",SETFIELDVER &  INTERFACE$ & CStr(dccount) & " selected","")
+	If replacestring = "" Then
+		MessageBox "Cancelling as requested",64,SETFIELDVER & INTERFACE$
+		Exit Sub
+	End If
+
+	If replacestring = "NOTHING" Then  ' V3.12 enhancement
+		replacestring = ""
+	End If
+
+	Print Time$ & " : " & SETFIELDVER & " Replace value " & findstring & " with " & replacestring
+
+	While Not doc Is Nothing
+		GoSub getholdvals
+		arresult = Replace( holdvals, findstring, replacestring)
+		changed = 0
+		For s = LBound(holdvals) To UBound(holdvals)
+			If(holdvals(s) <> arresult(s)) Then
+				changed = 1
+				Exit For
+			End If
+		Next
+		If(changed = 1) Then
+			Select Case fieldtype
+			Case "Integer (Long)", "Floating Point" :
+				ReDim tempdbl(UBound(arresult))
+				For t = LBound(arresult) To UBound(arresult)
+					tempdbl(t) = CDbl(arresult(t))
+				Next
+				Set item = doc.ReplaceItemValue( fieldname, tempdbl)  ' DJS 21/08/2013
+			Case "Date":
+				Set item = doc.ReplaceItemValue(fieldname, CDat(arresult(0)))
+				For t = LBound(arresult)+1 To UBound(arresult)
+					Call doc.ReplaceItemValue(fieldname, ArrayAppend(item.Values,CDat(arresult(t))))
+				Next
+			Case Else:
+				Set item = doc.ReplaceItemValue( fieldname, arresult)  ' TEXT
+				Call checktype(doc)
+		End Select
+
+			Call doc.Save( True, True )
+			updcnt = updcnt + 1
+		End If
+		If dc Is Nothing Then
+			Exit Sub
+		End If
+		Set doc = dc.getnextdocument(doc)
+	Wend
+
+	Exit Sub
+
+getholdvals:  ' NEED TO CONVERT TO STRINGS TO WORK CORRECTLY
+	y = 0
+	z = 1
+
+	Set docitem = doc.getfirstitem(fieldname)
+	selval = docitem.text
+	Stop
+	ReDim holdvals(y)
+	For w = 1  To Len(selval)
+		If(Mid(selval,w,1) = ";") Then
+			ReDim Preserve holdvals(y)
+			holdvals(y) = Mid(selval, z,w-z)
+			z = w + 1
+			y = y + 1
+		End If
+	Next
+
+	' GET THE LAST VALUE IF EXISTS
+	If (w > z) Then
+		ReDim Preserve holdvals(y)
+		holdvals(y) = Mid(selval,z,w-z)
+	End If
+	Return
+
+End Sub
+Sub DeSelect
+	Set uiview = ws.Currentview                        ' V3.04 revised
+	If Not uiview Is Nothing Then
+		Call UIView.DeselectAll                             ' V3.02 change agent properties to act on None
+	End If
+End Sub
+Function DesignElementRep(designelement As Variant) As Long
+	Dim CW(2) As String
+	Dim NL As String
+	Dim htmlBeg  As String
+	Dim htmlEnd  As String
+	Dim headBeg  As String
+	Dim headEnd  As String
+	Dim bodyBeg  As String
+	Dim bodyEnd  As String
+	Dim tableEnd As String
+	Dim styles As String
+	Dim windowtitle As String
+	Dim ReportHeading As String
+	Dim ReportHeading2 As String
+	Dim TableTitles  As String
+	Dim TableRows As String
+	Dim fieldval As String
+	Dim HA As String
+	Dim FileContent As String
+	Dim path  As String
+	Dim filename As String
+	Dim tempdir As String
+	Dim TemplateName As String
+	Dim DesignTemplateName As String
+	Dim Reportheading3 As String
+	Dim Reportheading4 As String
+	Dim ReportHeading5 As String
+	Dim ReportHeading6 As String
+	Dim managers As String
+	Dim tempman As String
+	Dim ftmess As String
+	Dim i As Long
+	Dim j As Long
+	dim filenum as integer
+	Dim dummy As Long
+	Dim x As Long
+	Dim y As Long
+	Dim managervar As Variant
+
+	'Widths of the table's columns (element 0 is column 1, etc).
+
+	CW(0) = "200"
+	CW(1) = "600"
+	CW(2) = "150"
+
+	'Line break for formatting the HTML text.
+	NL$ = Chr(13) + Chr(10)
+
+	'HTML stand-alone tags.
+	htmlBeg$ = "<html>" + NL$
+	htmlEnd$ = "</html>" + NL$
+	headBeg$ = "<head>" + NL$
+	headEnd$ = "</head>" + NL$
+	bodyBeg$ = "<body>" + NL$
+	bodyEnd$ = "</body>" + NL$
+	tableEnd$ = "</table>" + NL$
+
+	'HTML styles.
+	Styles$ = "<style>" + NL$ + _
+	"body {font-family:" & ARIAL &";font-size:" + FS1$ + "pt}" + NL$ + _
+	"h2 {font-family:" & ARIAL &";font-size:" + FS2$ + "pt}" + NL$ + _
+	"td {font-family:" & ARIAL &";font-size:" + FS1$ + "pt}" + NL$ + _
+	"</style>" + NL$
+
+	'Window's title.
+	WindowTitle$ = "<title>Design Listing of " & db.title & "</title>" + NL$
+
+	'Report's heading.
+	Dim sn As New NotesName(db.server)
+
+	'	TemplateName Property
+	'	Read-only. The template Name of a database, If the database Is a template. If the database Is Not a template, returns an empty String ("").
+	'	To Get: name$ = notesDatabase.TemplateName
+
+	'	DesignTemplateName Property
+	'	Read-only. The Name of the design template From which a database inherits its design. If the database does Not inherit its design From a design template, it returns an empty String ("").
+	'	To Get: name$ = notesDatabase.DesignTemplateName
+
+	TemplateName = db.TemplateName
+	DesignTemplateName = db.DesignTemplateName
+
+	Call findprohibit(False,False)   '  Find any prohibit Design Refresh Set first param to to True if we ever allow removal
+	prohibitmess = "Design Prohibit Refresh on For : "
+	If prohibitcnt > 0 Then
+		For m = LBound(sortedarray) To UBound(sortedarray)
+			prohibitmess = prohibitmess & sortedarray(m) & " . . "
+		Next
+	End If
+
+	Dim dc As	NotesDocumentCollection
+	Set dc = db.AllDocuments
+
+	ftmess = " Database IS "
+	If Not db.IsFTindexed Then
+		ftmess = ftmess &  "NOT "
+	End If
+	ftmess = ftmess &  "Full-Text Indexed"
+
+	ReportHeading = "<h4>" & db.title + "  _ "  + sn.abbreviated + "!!" & db.Filepath &"  _ "  & "Database size : " & Format$((db.size/1024/1024),"Fixed" ) & " (MB)" & "</h4>" + NL
+	ReportHeading2 = "<b>" + "Total docs in database : " & CStr(dc.count) & ". " & ftmess & "</b>"
+	If templatename <> "" Then
+		ReportHeading3 = "<b> This database is a template named : " & templatename & "</b>"
+	Else
+		ReportHeading3 = "<b> This database inherits from a template named : " & DesignTemplateName & "</b>"
+	End If
+	ReportHeading5 = "<b>" & prohibitmess &"</b>"
+	ReportHeading6 = "<b>" & Format(Now,"DD/MM/YYYY hh:nn:ss")&"</b>"
+
+	' the table's titles.
+	TableTitles$ = _
+	"<table cellpadding=""2"" cellspacing=""0"" border=""1"" bordercolorlight=""#000000"" bordercolordark=""#000000"">" + NL$ + _
+	"<tr bgcolor=""" + BC$ + """>" + NL$ + _
+	"<td width=""" + CW$(0) + """ valign=""top"" rowspan=""2"" align=""center""><b>Design Element</b></td>" + NL$ + _
+	"<td width=""" + CW$(1) + """ valign=""top"" rowspan=""2"" align=""center""><b>Design Element Name</b></td>" + NL$ + _
+	"</tr>" + NL$
+
+	HA$ = ""
+	'	HA$ = " align=""center"""
+	TableRows = ""
+	TableRows = TableRows + "<tr>" + NL
+	For i = LBound(designelement)  To UBound(designelement)
+
+		If InStr(designelement(i), "(**Prohibit Refresh is ON**)")   Or  InStr(designelement(i), "Form_Fields_Total")Then
+			TableRows = TableRows + "<tr bgcolor=""" + PROHIBITCOL$ + """>" + NL
+		Else
+			TableRows = TableRows + "<tr>" + NL
+		End If
+
+
+		For j = 0 To 1
+			Select Case j
+			Case 0: FieldVal = Left(designelement(i),InStr(designelement(i)," ~ "))
+			Case 1: FieldVal = Right(designelement(i), (Len(designelement(i)) - InStr(designelement(i)," ~ "))-2)
+		End Select
+
+			TableRows = TableRows + _
+			"<td width=""" + CW$(j) + """ valign=""top""" + HA$ + ">" + FieldVal + "</td>" + NL$
+		Next
+		TableRows$ = TableRows$ + "</tr>" + NL$
+	Next
+
+	'Create the HTML file content.
+	FileContent = _
+	htmlBeg$ + _
+	headBeg$ + _
+	Styles$ + WindowTitle$ + _
+	headEnd$ + _
+	bodyBeg$ + _
+	ReportHeading$ + _
+	ReportHeading2 + "<BR>" + _
+	ReportHeading3 + "<BR>" + _
+	ReportHeading5 +  "<BR>" + _
+	ReportHeading6 + _
+	TableTitles$ + TableRows$ + tableEnd$ + _
+	bodyEnd$ + _
+	htmlEnd$
+
+	' FIND CORRECT LOCAL PROFILE DIR
+	tempdir=Environ("Temp")
+	If tempdir="" Then
+		tempdir=Environ("Tmp")
+		If tempdir=""  Then
+			tempdir = "D:"   ' Nothing found so use the D root
+		End If
+	End If
+
+	FileName = tempdir & "\" & db.title & "_" & "DesignRep.html"
+	FileNum = FreeFile()
+	Open FileName For Output As FileNum
+
+	Print # FileNum, FileContent
+
+	Close #FileNum
+
+	dummy = Shell(BROWSERPATH$ + " " + FileName,1)
+
+End Function
+Sub WsGoto(gcellref As String) ' goto a particular cell
+	Dim cellref As Variant
+	cellref = CVar(gcellref)
+	Call wsSetCurrentCell(cellref)
+	wsObject.Range(cellref).select
+End Sub
+
+Sub ExportViewDXL
+	Dim view As NotesView
+	Dim nc As NotesNoteCollection
+	Dim stream As NotesStream
+	Dim exporter As NotesDXLExporter
+	Dim viewnames() As String
+	Dim fileName As String
+	Dim viewToExport As String
+	Dim i As Integer
+	
+	ReDim viewNames(0)
+	i = 0
+	ForAll indView In db.Views
+		ReDim Preserve viewNames(i)
+		viewNames(i) = indView.Name
+		i = i+1
+	End ForAll
+	
+	Call InsertionSort (viewNames, "ASC")
+	
+	viewToExport = ws.Prompt(4, "Choose View", "Choose the view to export from the list below:", "", viewNames)
+	If viewToExport = "" Then 
+		Print "No view selected"
+		Exit Sub
+	End If
+	Set view = db.GetView(viewToExport)
+	Set nc = db.CreateNoteCollection(False)
+	Call nc.BuildCollection
+	Call nc.Add(view)
+	fileName = sess.GetEnvironmentString("Directory", True)
+	If Right(fileName, 1) <> "\" Then fileName = fileName & "\"
+	fileName = fileName & viewToExport & Left(db.FileName, Len(db.FileName) - 3) & "dxl"
+	Print Time$ & " Filename = " & fileName
+	Set stream = sess.CreateStream
+	If Not stream.Open(fileName) Then Exit Sub
+	Call stream.Truncate
+	Set exporter = sess.CreateDXLExporter(nc, stream)
+	Call exporter.Process
+	Print Time$ & " : " & SETFIELDVER & " Agent ended OK - Exported View : " & view.name & " to " & fileName
+End Sub
