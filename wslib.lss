@@ -1,0 +1,315 @@
+Option Public
+
+Dim wsObject As Variant
+Dim Range As Variant
+Dim Workbooks As Variant
+
+Const wsFONTNORMAL = 0
+Const wsFONTBOLD  = 1
+Const wsFONTITALIC = 2
+Const wsFONTUNDERLINE = 4
+Const wsALIGNLEFT = 8
+Const wsALIGNCENTRE = 16
+Const wsALIGNRIGHT = 32
+Const wsALIGNFILL = 64 
+
+
+
+Dim wsCurrentCellFlags As Integer ' last combination of flags set to a cell
+
+Dim wsCurrentFontSize As Integer ' current font size 0 means don't change
+Dim wsCurrentFontName As String ' leave blank for default font
+Dim wsCurrentNumberFormat As String ' leave blank for default
+Dim wsCurrentCol As Long ' current column
+Dim wsCurrentRow As Long 'current row
+
+Dim wsLastRow As Long ' numeric value of last row populated
+Dim wsLastcol As Long ' numeric value of last column poupulated (col a = 1, b = 2 etc)
+
+Dim wsColstring As String ' col ref string eg A
+Sub wsInc_Col ' increment column
+	wsCurrentCol = wsCurrentCol + 1
+	If wsCurrentCol > wsLastCol Then wsLastCol = wsCurrentCol
+	
+End Sub
+
+Sub wsSetCurrentFontSize(fontsize As Integer) ' change current font size
+	wsCurrentFontSize = FontSize
+End Sub
+Sub wsPageOrientation(style As String)
+	style = Ucase(style)
+	If style = "P" Then wsObject.ActiveSheet.pagesetup.Orientation = 1
+	If style = "L" Then wsObject.ActiveSheet.pagesetup.Orientation = 2
+	
+End Sub
+Sub wsAutofit(Arange As String) ' autofit currentcell
+	Dim vRange As Variant
+	vRange = Cvar(Arange)
+	wsObject.range(vRange).select
+	wsObject.selection.columns.autofit
+	wsObject.selection.rows.autofit
+End Sub
+
+
+Sub wsPageFooter(leftfooter As String,centrefooter As String,rightfooter As String) ' set page footers
+	wsObject.ActiveSheet.pagesetup.leftfooter =  leftfooter
+	wsObject.ActiveSheet.pagesetup.centerfooter =  centrefooter
+	wsObject.ActiveSheet.pagesetup.rightfooter =  rightfooter
+End Sub
+Sub wsSelectSheet(sheet As String)
+	wsObject.sheets(sheet).select
+End Sub
+Sub wsSetColumnWidth(wid)
+	wsObject.range(wsCellString).columnwidth = wid
+	
+End Sub
+
+Sub wsOpenTabFile(filename As String)
+	Call wsObject.workbooks.OpenText(filename,,1,1,,,1)
+	
+	
+'	expression.OpenText(Filename, Origin, StartRow, DataType, TextQualifier, ConsecutiveDelimiter, Tab, '
+'Semicolon, Comma, Space, Other, OtherChar, FieldInfo, DecimalSeparator, ThousandsSeparator)
+	
+End Sub
+Sub wsInit
+	' call this to get a handle on the office objects in this script lib if you are getting hold of an existing file rather than creating new
+	Set wsObject = createObject("excel.Application")
+	If wsObject Is Nothing Then
+		Print "Excel not found in wsInit"
+		Exit Sub
+	End If
+End Sub
+Sub wsGotoColumnA ' return to column a in same row
+	Call wsGoto("A" + Ltrim(Str(wsCurrentRow)))
+End Sub
+Sub wsSetCurrentFontName(fontname As String) ' change current font name
+	wsCurrentFontname = fontname
+End Sub
+Sub wsSort1Column(DataRange As String,SortRange1 As String,aord As String) ' sort the data
+	
+	Dim sr As Variant
+	Dim aordconst 
+	If Ucase(aord) = "D" Then aordconst = 2 Else aordconst = 1
+	Set sr = wsObject.Range(sortrange1)
+	Dim xlsort As Variant
+	
+	On Error Resume Next
+	Set xlsort = wsObject.Range(DataRange).sort(sr,aordconst)
+	
+End Sub
+
+Sub wsSort2Column(DataRange As String,SortRange1 As String,SortRange2 As String) ' sort the data
+	Dim sr1 As Variant
+	Dim sr2 As Variant
+	
+	Set sr1 = wsObject.Range(sortrange1)
+	Set sr2 = wsObject.Range(sortrange2)
+	
+	Dim xlsort As Variant
+	
+	On Error Resume Next
+	Set xlsort = wsObject.Range(DataRange).sort(sr1,,,sr2,)
+End Sub
+Sub wsCellVerticalAlignment(style As String)
+	style = Ucase(style)
+	Dim va As Integer
+	If style = "T" Then va   = -4160
+	If style = "M" Then va = -4108
+	If style = "B" Then va = -4107
+	
+	
+	wsObject.Range(wsCellString).VerticalAlignment = va
+End Sub
+
+Function wsCellString As Variant ' cell ref string eg A2
+	Call wsGetColString
+	wsCellString = wsColString & Ltrim(Str(wsCurrentRow))
+End Function
+Sub wsSort3Column(DataRange As String,SortRange1 As String,SortRange2 As String,SortRange3 As String) ' sort the data
+	Dim sr1 As Variant
+	Dim sr2 As Variant
+	Dim sr3 As Variant
+	
+	
+	Set sr1 = wsObject.Range(sortrange1)
+	Set sr2 = wsObject.Range(sortrange2)
+	Set sr3 = wsObject.Range(sortrange3)
+	
+	Dim xlsort As Variant
+	
+	
+	On Error Resume Next
+	Set xlsort = wsObject.Range(DataRange).sort(sr1,,,sr2,,sr3)
+End Sub
+Sub wsSetCurrentCellFlags(Cellflags As Integer) ' set wsCurrentCellFlags
+	wsCurrentCellFlags = cellflags
+End Sub
+Sub wsCellWrapText(style As Integer)
+	If style = True Then
+		wsObject.Range(wsCellString).WrapText = True
+	Else
+		wsObject.Range(wsCellString).WrapText = False
+	End If
+	
+End Sub
+Sub wsPaste
+	wsObject.ActiveSheet.Paste
+End Sub
+Sub wsNameSheet(sheetname) ' name the sheet
+	wsObject.ActiveSheet.name = sheetname
+End Sub
+Sub wsSetColumnNumberFormat(col As String,numformat As String)
+	wsobject.Columns(col & ":" & col).Select
+	wsobject.Selection.NumberFormat = numformat
+End Sub
+Sub wsInc_Row ' increment current row
+	wsCurrentRow = wsCurrentRow + 1
+	If wsCurrentRow > wsLastRow Then wsLastRow = wsCurrentRow
+End Sub
+
+Sub wsCell(cCellRef As String, CellValue As Variant, CellFlags As Integer,FontSize As Integer,FontName As String,NumberFormat As String)
+	Dim cellref As Variant
+	cellref = Cvar(cCellref)
+	wsObject.range(CellRef) = CellValue
+	If (CellFlags And wsFONTBOLD) = wsFONTBOLD Then wsObject.range(cellref).Font.Bold = True Else wsObject.range(cellref).Font.Bold = False
+	If (CellFlags And wsFONTITALIC) = wsFONTITALIC Then wsObject.range(cellref).Font.Italic = True Else wsObject.range(cellref).Font.Italic = False
+	If (CellFlags And wsFONTUNDERLINE) = wsFONTUNDERLINE Then wsObject.range(cellref).Font.Underline = True Else wsObject.range(cellref).Font.Underline = False
+	If (CellFlags And wsALIGNLEFT) = wsALIGNLEFT Then wsObject.range(cellref).HorizontalAlignment = 1
+	If (CellFlags And wsALIGNCENTRE) = wsALIGNCENTRE Then wsObject.range(cellref).HorizontalAlignment = 3 
+	If (CellFlags And wsALIGNRIGHT) = wsALIGNRIGHT Then wsObject.range(cellref).HorizontalAlignment = 4
+	If (CellFlags And wsALIGNFILL) = wsALIGNFILL Then wsObject.range(cellref).HorizontalAlignment = 5
+	
+	If FontSize > 0 Then 
+		wsObject.range(cellref).font.size = FontSize
+		wsCurrentFontSize = FontSize
+	End If
+	
+	If FontName <> "" Then 
+		wsObject.range(cellref).font.name = FontName
+		wsCurrentFontName = FontName
+	End If
+	
+	If NumberFormat <> "" Then
+		wsObject.Range(cellref).NumberFormat = NumberFormat
+		wsCurrentNumberFormat = NumberFormat
+	End If
+	
+	wsCurrentCellFlags = CellFlags
+	
+	Call wsSetCurrentCell(cellref)
+	
+End Sub
+
+
+Sub wsGoto(gcellref As String) ' goto a particular cell
+	Dim cellref As Variant
+	cellref = Cvar(gcellref)
+	Call wsSetCurrentCell(cellref)
+	wsObject.Range(cellref).select
+End Sub
+Sub wsSetRowAutoHeight
+	
+	wsObject.range(wsCellString).Rows.AutoFit
+	
+End Sub 
+Sub wsInsertRows(irange As String)
+	wsobject.Range(irange).Select
+	wsobject.Selection.EntireRow.Insert
+End Sub
+
+Sub wsPageMarginInches(LMargin As Double,RMargin As Double) ' set page margins (inches)
+	
+	
+	wsObject.ActiveSheet.pagesetup.leftmargin = lMargin * 72.0
+	wsObject.ActiveSheet.pagesetup.rightmargin = RMargin * 72.0
+End Sub
+
+Sub wsSetCurrentNumberFormat(cellformat As String)
+	wsCurrentNumberFormat = cellformat
+End Sub
+
+Sub wsSetCurrentCell(cellref) ' set wsCurrentCol and wsCUrrentRow from a cell ref
+      ' 
+     ' now set current cell
+     '
+	Dim cr As String
+	
+	Dim rpos As Integer
+	
+	cr = Ucase(cellref)
+	Dim rr As String
+	wsCurrentCol = Asc(Left(cr,1)) - 64
+	
+	rpos = 2
+	If (Mid(cr,2,1) >= "A") And (Mid(cr,2,1) <= "Z")Then
+		wsCurrentCol = (wsCurrentCol * 26)  + Asc(Mid(cr,2,1)) - 64
+		rpos = 3
+	End If
+	rr = Mid(cr,rpos, 1 + Len(cr) - rpos)
+	
+	wsCurrentRow = Cint(rr)
+	If wsCurrentRow > wsLastRow Then wsLastRow = wsCurrentRow
+End Sub
+Sub wsGetColString
+	Dim c1 As Integer
+	Dim c2 As Integer
+	
+	c1 = Int((wsCurrentCol - 1) / 26)
+	If c1 > 0 Then wsColString = Chr(96 + c1) Else wsColString = ""
+	c2 = 1 + (wsCurrentCol + 25) Mod 26
+	wsColString = wsColString & Chr(c2 + 96)
+	
+	
+	
+End Sub
+Sub wsInsertHorizontalPageBreak ' insert horizontal page break
+	wsObject.Sheets("Sheet1").HPageBreaks.Add(wsObject.Range("A" & Ltrim(Str(wsCurrentrow+1))))
+End Sub
+Sub wsCreate
+	Set wsObject = createObject("excel.Application")
+	If wsObject Is Nothing Then
+		Print "Excel not found in wsCreate" 
+		Exit Sub
+	End If
+	wsObject.workbooks.add
+	
+     '
+     ' set ups
+     '
+	wsCurrentCol = 1
+	wsCurrentRow = 1
+	wsLastrow = wsCurrentRow
+	wsLastCol = wsCurrentCol
+	wsCurrentFontSize = 0 ' i.e. don't change font size
+	wsCurrentFontName = "" ' i.e. use default font
+	Call wsGetColString
+	
+	
+End Sub
+
+
+Sub wsPageHeader(leftHeader As String,centreheader As String,rightheader As String) ' set page headers
+	wsObject.ActiveSheet.pagesetup.leftheader =  leftheader
+	wsObject.ActiveSheet.pagesetup.centerheader =  centreheader
+	wsObject.ActiveSheet.pagesetup.rightheader =  rightheader
+End Sub
+
+Sub wsShow
+	wsObject.visible = True
+End Sub
+
+Sub wsCellMerge(style As Integer)
+	If style = True Then
+		wsObject.Range(wsCellString).MergeCells = True
+	Else
+		wsObject.Range(wsCellString).MergeCells = False
+	End If
+	
+End Sub
+Sub wsDestroy
+	Set wsObject = Nothing  
+End Sub
+Sub wsCurrentCell(cellvalue As Variant) ' set current cell value with value
+	Call wsCell(wsCellString,cellvalue,wsCurrentCellFlags,wsCurrentFontSize,wsCurrentFontName,wsCurrentNumberFormat)
+End Sub

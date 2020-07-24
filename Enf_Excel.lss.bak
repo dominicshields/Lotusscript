@@ -1,0 +1,2469 @@
+Option Public
+Option Base 1
+'Option Declare  SADLY THE EXCEL STUFF DOES NOT ALL WORK WITH THIS ON
+Use "logging"
+Dim xlsess As notessession
+Dim xldb As notesdatabase
+Dim xlerrorstub As String
+Dim xlerrortext As String
+
+'TWOLINE = 1 IS BIG BOX, 32 IS SMALL LINE. 2 and 3 are other valid values
+Const NPB_TWOLINE = 1
+Declare Function NEMProgressBegin Lib "nnotesws.dll" ( Byval wFlags As Integer ) As Long
+Declare Sub NEMProgressEnd Lib "nnotesws.dll" ( Byval hwnd As Long )
+Declare Sub NEMProgressSetBarPos Lib "nnotesws.dll" ( Byval hwnd As Long, Byval dwPos As Long)
+Declare Sub NEMProgressSetBarRange Lib "nnotesws.dll" ( Byval hwnd As Long,  Byval dwMax As Long )
+Declare Sub NEMProgressSetText Lib "nnotesws.dll" ( Byval hwnd As Long, Byval pcszLine1 As String, Byval pcszLine2 As String )
+
+Dim SortedArray As Variant
+Const xl24HourClock=33
+Const xl3DArea=-4098
+Const xl3DAreaStacked=78
+Const xl3DAreaStacked100=79
+Const xl3DBar=-4099
+Const xl3DBarClustered=60
+Const xl3DBarStacked=61
+Const xl3DBarStacked100=62
+Const xl3DColumn=-4100
+Const xl3DColumnClustered=54
+Const xl3DColumnStacked=55
+Const xl3DColumnStacked100=56
+Const xl3DEffects1=13
+Const xl3DEffects2=14
+Const xl3DLine=-4101
+Const xl3DPie=-4102
+Const xl3DPieExploded=70
+Const xl3DSurface=-4103
+Const xl4DigitYears=43
+Const xlA1=1
+Const xlAbove=0
+Const xlAbsolute=1
+Const xlAbsRowRelColumn=2
+Const xlAccounting1=4
+Const xlAccounting2=5
+Const xlAccounting3=6
+Const xlAccounting4=17
+Const xlAdd=2
+Const xlAddIn=18
+Const xlAll=-4104
+Const xlAllAtOnce=2
+Const xlAllChanges=2
+Const xlAllExceptBorders=6
+Const xlAllFaces=7
+Const xlAlternateArraySeparator=16
+Const xlAnd=1
+Const xlAnyGallery=23
+Const xlArea=1
+Const xlAreaStacked=76
+Const xlAreaStacked100=77
+Const xlArrangeStyleCascade=7
+Const xlArrangeStyleHorizontal=-4128
+Const xlArrangeStyleTiled=1
+Const xlArrangeStyleVertical=-4166
+Const xlArrowHeadLengthLong=3
+Const xlArrowHeadLengthMedium=-4138
+Const xlArrowHeadLengthShort=1
+Const xlArrowHeadStyleClosed=3
+Const xlArrowHeadStyleDoubleClosed=5
+Const xlArrowHeadStyleDoubleOpen=4
+Const xlArrowHeadStyleNone=-4142
+Const xlArrowHeadStyleOpen=2
+Const xlArrowHeadWidthMedium=-4138
+Const xlArrowHeadWidthNarrow=1
+Const xlArrowHeadWidthWide=3
+Const xlAscending=1
+Const xlAutoActivate=3
+Const xlAutoClose=2
+Const xlAutoDeactivate=4
+Const xlAutoFill=4
+Const xlAutomatic=-4105
+Const xlAutomaticScale=-4105
+Const xlAutomaticUpdate=4
+Const xlAutoOpen=1
+Const xlAverage=-4106
+Const xlAxis=21
+Const xlAxisCrossesAutomatic=-4105
+Const xlAxisCrossesCustom=-4114
+Const xlAxisCrossesMaximum=2
+Const xlAxisCrossesMinimum=4
+Const xlAxisTitle=17
+Const xlBackgroundAutomatic=-4105
+Const xlBackgroundOpaque=3
+Const xlBackgroundTransparent=2
+Const xlBarClustered=57
+Const xlBarOfPie=71
+Const xlBarStacked=58
+Const xlBarStacked100=59
+Const xlBelow=1
+Const xlBetween=1
+Const xlBidi=-5000
+Const xlBidiCalendar=3
+Const xlBIFF=2
+Const xlBitmap=2
+Const xlBlanks=4
+Const xlBMP=1
+Const xlBoth=1
+Const xlBottom=-4107
+Const xlBottom10Items=4
+Const xlBottom10Percent=6
+Const xlBox=0
+Const xlBubble=15
+Const xlBubble3DEffect=87
+Const xlBuiltIn=21
+Const xlButton=15
+Const xlButtonControl=0
+Const xlByColumns=2
+Const xlByRows=1
+Const xlCalculationAutomatic=-4105
+Const xlCalculationManual=-4135
+Const xlCalculationSemiautomatic=2
+Const xlCancel=1
+Const xlCap=1
+Const xlCascade=7
+Const xlCategory=1
+Const xlCategoryScale=2
+Const xlCellTypeAllFormatConditions=-4172
+Const xlCellTypeAllValidation=-4174
+Const xlCellTypeBlanks=4
+Const xlCellTypeComments=-4144
+Const xlCellTypeConstants=2
+Const xlCellTypeFormulas=-4123
+Const xlCellTypeLastCell=11
+Const xlCellTypeSameFormatConditions=-4173
+Const xlCellTypeSameValidation=-4175
+Const xlCellTypeVisible=12
+Const xlCellValue=1
+Const xlCenter=-4108
+Const xlCenterAcrossSelection=7
+Const xlCGM=7
+Const xlChangeAttributes=6
+Const xlChart=-4109
+Const xlChart4=2
+Const xlChartArea=2
+Const xlChartAsWindow=5
+Const xlChartInPlace=4
+Const xlChartSeries=17
+Const xlChartShort=6
+Const xlChartTitle=4
+Const xlChartTitles=18
+Const xlCheckBox=1
+Const xlChecker=9
+Const xlChronological=3
+Const xlCircle=8
+Const xlClassic1=1
+Const xlClassic2=2
+Const xlClassic3=3
+Const xlClipboard=3
+Const xlClipboardFormatBIFF=8
+Const xlClipboardFormatBIFF2=18
+Const xlClipboardFormatBIFF3=20
+Const xlClipboardFormatBIFF4=30
+Const xlClipboardFormatBinary=15
+Const xlClipboardFormatBitmap=9
+Const xlClipboardFormatCGM=13
+Const xlClipboardFormatCSV=5
+Const xlClipboardFormatDIF=4
+Const xlClipboardFormatDspText=12
+Const xlClipboardFormatEmbeddedObject=21
+Const xlClipboardFormatEmbedSource=22
+Const xlClipboardFormatLink=11
+Const xlClipboardFormatLinkSource=23
+Const xlClipboardFormatLinkSourceDesc=32
+Const xlClipboardFormatMovie=24
+Const xlClipboardFormatNative=14
+Const xlClipboardFormatObjectDesc=31
+Const xlClipboardFormatObjectLink=19
+Const xlClipboardFormatOwnerLink=17
+Const xlClipboardFormatPICT=2
+Const xlClipboardFormatPrintPICT=3
+Const xlClipboardFormatRTF=7
+Const xlClipboardFormatScreenPICT=29
+Const xlClipboardFormatStandardFont=28
+Const xlClipboardFormatStandardScale=27
+Const xlClipboardFormatSYLK=6
+Const xlClipboardFormatTable=16
+Const xlClipboardFormatText=0
+Const xlClipboardFormatToolFace=25
+Const xlClipboardFormatToolFacePICT=26
+Const xlClipboardFormatVALU=1
+Const xlClipboardFormatWK1=10
+Const xlClosed=3
+Const xlCodePage=2
+Const xlColor1=7
+Const xlColor2=8
+Const xlColor3=9
+Const xlColorIndexAutomatic=-4105
+Const xlColorIndexNone=-4142
+Const Column=999
+Const xlColumnClustered=51
+Const xlColumnField=2
+Const xlColumnHeader=-4110
+Const xlColumnItem=5
+Const xlColumnLabels=2
+Const xlColumns=2
+Const xlColumnSeparator=14
+Const xlColumnStacked=52
+Const xlColumnStacked100=53
+Const xlColumnThenRow=2
+Const xlCombination=-4111
+Const xlCommand=2
+Const xlCommandUnderlinesAutomatic=-4105
+Const xlCommandUnderlinesOff=-4146
+Const xlCommandUnderlinesOn=1
+Const xlCommentAndIndicator=1
+Const xlCommentIndicatorOnly=-1
+Const xlComments=-4144
+Const xlComplete=4
+Const xlConeBarClustered=102
+Const xlConeBarStacked=103
+Const xlConeBarStacked100=104
+Const xlConeCol=105
+Const xlConeColClustered=99
+Const xlConeColStacked=100
+Const xlConeColStacked100=101
+Const xlConeToMax=5
+Const xlConeToPoint=4
+Const xlConsolidation=3
+Const xlConstant=1
+Const xlConstants=2
+Const xlContents=2
+Const xlContext=-5002
+Const xlContinuous=1
+Const xlCopy=1
+Const xlCorner=2
+Const xlCorners=6
+Const xlCount=-4112
+Const xlCountNums=-4113
+Const xlCountryCode=1
+Const xlCountrySetting=2
+Const xlCreatorCode=1480803660
+Const xlCrissCross=16
+Const xlCross=4
+Const xlCSV=6
+Const xlCSVMac=22
+Const xlCSVMSDOS=24
+Const xlCSVWindows=23
+Const xlCurrencyBefore=37
+Const xlCurrencyCode=25
+Const xlCurrencyDigits=27
+Const xlCurrencyLeadingZeros=40
+Const xlCurrencyMinusSign=38
+Const xlCurrencyNegative=28
+Const xlCurrencySpaceBefore=36
+Const xlCurrencyTrailingZeros=39
+Const xlCurrentPlatformText=-4158
+Const xlCustom=-4114
+Const xlCut=2
+Const xlCylinder=3
+Const xlCylinderBarClustered=95
+Const xlCylinderBarStacked=96
+Const xlCylinderBarStacked100=97
+Const xlCylinderCol=98
+Const xlCylinderColClustered=92
+Const xlCylinderColStacked=93
+Const xlCylinderColStacked100=94
+Const xlDash=-4115
+Const xlDashDot=4
+Const xlDashDotDot=5
+Const xlDataAndLabel=0
+Const xlDatabase=1
+Const xlDataField=4
+Const xlDataHeader=3
+Const xlDataItem=7
+Const xlDataLabel=0
+Const xlDataLabelsShowBubbleSizes=6
+Const xlDataLabelsShowLabel=4
+Const xlDataLabelsShowLabelAndPercent=5
+Const xlDataLabelsShowNone=-4142
+Const xlDataLabelsShowPercent=3
+Const xlDataLabelsShowValue=2
+Const xlDataOnly=2
+Const xlDataSeriesLinear=-4132
+Const xlDataTable=7
+Const xlDate=2
+Const xlDateOrder=32
+Const xlDateSeparator=17
+Const xlDay=1
+Const xlDayCode=21
+Const xlDayLeadingZero=42
+Const xlDays=0
+Const xlDBF2=7
+Const xlDBF3=8
+Const xlDBF4=11
+Const xlDebugCodePane=13
+Const xlDecimalSeparator=3
+Const xlDefault=-4143
+Const xlDefaultAutoFormat=-1
+Const xlDelimited=1
+Const xlDescending=2
+Const xlDesktop=9
+Const xlDiagonalDown=5
+Const xlDiagonalUp=6
+Const xlDialogActivate=103
+Const xlDialogActiveCellFont=476
+Const xlDialogAddChartAutoformat=390
+Const xlDialogAddinManager=321
+Const xlDialogAlignment=43
+Const xlDialogApplyNames=133
+Const xlDialogApplyStyle=212
+Const xlDialogAppMove=170
+Const xlDialogAppSize=171
+Const xlDialogArrangeAll=12
+Const xlDialogAssignToObject=213
+Const xlDialogAssignToTool=293
+Const xlDialogAttachText=80
+Const xlDialogAttachToolbars=323
+Const xlDialogAutoCorrect=485
+Const xlDialogAxes=78
+Const xlDialogBorder=45
+Const xlDialogCalculation=32
+Const xlDialogCellProtection=46
+Const xlDialogChangeLink=166
+Const xlDialogChartAddData=392
+Const xlDialogChartLocation=527
+Const xlDialogChartOptionsDataLabels=505
+Const xlDialogChartOptionsDataTable=506
+Const xlDialogChartSourceData=541
+Const xlDialogChartTrend=350
+Const xlDialogChartType=526
+Const xlDialogChartWizard=288
+Const xlDialogCheckboxProperties=435
+Const xlDialogClear=52
+Const xlDialogColorPalette=161
+Const xlDialogColumnWidth=47
+Const xlDialogCombination=73
+Const xlDialogConditionalFormatting=583
+Const xlDialogConsolidate=191
+Const xlDialogCopyChart=147
+Const xlDialogCopyPicture=108
+Const xlDialogCreateNames=62
+Const xlDialogCreatePublisher=217
+Const xlDialogCustomizeToolbar=276
+Const xlDialogCustomViews=493
+Const xlDialogDataDelete=36
+Const xlDialogDataLabel=379
+Const xlDialogDataSeries=40
+Const xlDialogDataValidation=525
+Const xlDialogDefineName=61
+Const xlDialogDefineStyle=229
+Const xlDialogDeleteFormat=111
+Const xlDialogDeleteName=110
+Const xlDialogDemote=203
+Const xlDialogDisplay=27
+Const xlDialogEditboxProperties=438
+Const xlDialogEditColor=223
+Const xlDialogEditDelete=54
+Const xlDialogEditionOptions=251
+Const xlDialogEditSeries=228
+Const xlDialogErrorbarX=463
+Const xlDialogErrorbarY=464
+Const xlDialogExtract=35
+Const xlDialogFileDelete=6
+Const xlDialogFileSharing=481
+Const xlDialogFillGroup=200
+Const xlDialogFillWorkgroup=301
+Const xlDialogFilter=447
+Const xlDialogFilterAdvanced=370
+Const xlDialogFindFile=475
+Const xlDialogFont=26
+Const xlDialogFontProperties=381
+Const xlDialogFormatAuto=269
+Const xlDialogFormatChart=465
+Const xlDialogFormatCharttype=423
+Const xlDialogFormatFont=150
+Const xlDialogFormatLegend=88
+Const xlDialogFormatMain=225
+Const xlDialogFormatMove=128
+Const xlDialogFormatNumber=42
+Const xlDialogFormatOverlay=226
+Const xlDialogFormatSize=129
+Const xlDialogFormatText=89
+Const xlDialogFormulaFind=64
+Const xlDialogFormulaGoto=63
+Const xlDialogFormulaReplace=130
+Const xlDialogFunctionWizard=450
+Const xlDialogGallery3dArea=193
+Const xlDialogGallery3dBar=272
+Const xlDialogGallery3dColumn=194
+Const xlDialogGallery3dLine=195
+Const xlDialogGallery3dPie=196
+Const xlDialogGallery3dSurface=273
+Const xlDialogGalleryArea=67
+Const xlDialogGalleryBar=68
+Const xlDialogGalleryColumn=69
+Const xlDialogGalleryCustom=388
+Const xlDialogGalleryDoughnut=344
+Const xlDialogGalleryLine=70
+Const xlDialogGalleryPie=71
+Const xlDialogGalleryRadar=249
+Const xlDialogGalleryScatter=72
+Const xlDialogGoalSeek=198
+Const xlDialogGridlines=76
+Const xlDialogInsert=55
+Const xlDialogInsertHyperlink=596
+Const xlDialogInsertNameLabel=496
+Const xlDialogInsertObject=259
+Const xlDialogInsertPicture=342
+Const xlDialogInsertTitle=380
+Const xlDialogLabelProperties=436
+Const xlDialogListboxProperties=437
+Const xlDialogMacroOptions=382
+Const xlDialogMailEditMailer=470
+Const xlDialogMailLogon=339
+Const xlDialogMailNextLetter=378
+Const xlDialogMainChart=85
+Const xlDialogMainChartType=185
+Const xlDialogMenuEditor=322
+Const xlDialogMove=262
+Const xlDialogNew=119
+Const xlDialogNote=154
+Const xlDialogObjectProperties=207
+Const xlDialogObjectProtection=214
+Const xlDialogOpen=1
+Const xlDialogOpenLinks=2
+Const xlDialogOpenMail=188
+Const xlDialogOpenText=441
+Const xlDialogOptionsCalculation=318
+Const xlDialogOptionsChart=325
+Const xlDialogOptionsEdit=319
+Const xlDialogOptionsGeneral=356
+Const xlDialogOptionsListsAdd=458
+Const xlDialogOptionsTransition=355
+Const xlDialogOptionsView=320
+Const xlDialogOutline=142
+Const xlDialogOverlay=86
+Const xlDialogOverlayChartType=186
+Const xlDialogPageSetup=7
+Const xlDialogParse=91
+Const xlDialogPasteNames=58
+Const xlDialogPasteSpecial=53
+Const xlDialogPatterns=84
+Const xlDialogPhonetic=538
+Const xlDialogPivotCalculatedField=570
+Const xlDialogPivotCalculatedItem=572
+Const xlDialogPivotFieldGroup=433
+Const xlDialogPivotFieldProperties=313
+Const xlDialogPivotFieldUngroup=434
+Const xlDialogPivotShowPages=421
+Const xlDialogPivotSolveOrder=568
+Const xlDialogPivotTableOptions=567
+Const xlDialogPivotTableWizard=312
+Const xlDialogPlacement=300
+Const xlDialogPrint=8
+Const xlDialogPrinterSetup=9
+Const xlDialogPrintPreview=222
+Const xlDialogPromote=202
+Const xlDialogProperties=474
+Const xlDialogProtectDocument=28
+Const xlDialogProtectSharing=620
+Const xlDialogPushbuttonProperties=445
+Const xlDialogReplaceFont=134
+Const xlDialogRoutingSlip=336
+Const xlDialogRowHeight=127
+Const xlDialogRun=17
+Const xlDialogSaveAs=5
+Const xlDialogSaveCopyAs=456
+Const xlDialogSaveNewObject=208
+Const xlDialogSaveWorkbook=145
+Const xlDialogSaveWorkspace=285
+Const xlDialogScale=87
+Const xlDialogScenarioAdd=307
+Const xlDialogScenarioCells=305
+Const xlDialogScenarioEdit=308
+Const xlDialogScenarioMerge=473
+Const xlDialogScenarioSummary=311
+Const xlDialogScrollbarProperties=420
+Const xlDialogSelectSpecial=132
+Const xlDialogSendMail=189
+Const xlDialogSeriesAxes=460
+Const xlDialogSeriesOptions=557
+Const xlDialogSeriesOrder=466
+Const xlDialogSeriesShape=504
+Const xlDialogSeriesX=461
+Const xlDialogSeriesY=462
+Const xlDialogSetBackgroundPicture=509
+Const xlDialogSetPrintTitles=23
+Const xlDialogSetUpdateStatus=159
+Const xlDialogSheet=-4116
+Const xlDialogShowDetail=204
+Const xlDialogShowToolbar=220
+Const xlDialogSize=261
+Const xlDialogSort=39
+Const xlDialogSortSpecial=192
+Const xlDialogSplit=137
+Const xlDialogStandardFont=190
+Const xlDialogStandardWidth=472
+Const xlDialogStyle=44
+Const xlDialogSubscribeTo=218
+Const xlDialogSubtotalCreate=398
+Const xlDialogSummaryInfo=474
+Const xlDialogTable=41
+Const xlDialogTabOrder=394
+Const xlDialogTextToColumns=422
+Const xlDialogUnhide=94
+Const xlDialogUpdateLink=201
+Const xlDialogVbaInsertFile=328
+Const xlDialogVbaMakeAddin=478
+Const xlDialogVbaProcedureDefinition=330
+Const xlDialogView3d=197
+Const xlDialogWindowMove=14
+Const xlDialogWindowSize=13
+Const xlDialogWorkbookAdd=281
+Const xlDialogWorkbookCopy=283
+Const xlDialogWorkbookInsert=354
+Const xlDialogWorkbookMove=282
+Const xlDialogWorkbookName=386
+Const xlDialogWorkbookNew=302
+Const xlDialogWorkbookOptions=284
+Const xlDialogWorkbookProtect=417
+Const xlDialogWorkbookTabSplit=415
+Const xlDialogWorkbookUnhide=384
+Const xlDialogWorkgroup=199
+Const xlDialogWorkspace=95
+Const xlDialogZoom=256
+Const xlDiamond=2
+Const xlDIF=9
+Const xlDifferenceFrom=2
+Const xlDirect=1
+Const xlDisabled=0
+Const XlDisplayShapes=-4104
+Const xlDistributed=-4117
+Const xlDivide=5
+Const xlDoNotSaveChanges=2
+Const xlDot=-4118
+Const xlDouble=-4119
+Const xlDoubleAccounting=5
+Const xlDoubleClosed=5
+Const xlDoubleOpen=4
+Const xlDoubleQuote=1
+Const xlDoughnut=-4120
+Const xlDoughnutExploded=80
+Const xlDown=-4121
+Const xlDownBars=20
+Const xlDownThenOver=1
+Const xlDownward=-4170
+Const xlDrawingObject=14
+Const xlDropDown=2
+Const xlDropLines=26
+Const xlDRW=4
+Const xlDXF=5
+Const xlEdgeBottom=9
+Const xlEdgeLeft=7
+Const xlEdgeRight=10
+Const xlEdgeTop=8
+Const xlEditBox=3
+Const xlEditionDate=2
+Const xlEnd=2
+Const xlEndSides=3
+Const xlEntireChart=20
+Const xlEPS=8
+Const xlEqual=3
+Const xlErrDiv0=2007
+Const xlErrNA=2042
+Const xlErrName=2029
+Const xlErrNull=2000
+Const xlErrNum=2036
+Const xlErrorBarIncludeBoth=1
+Const xlErrorBarIncludeMinusValues=3
+Const xlErrorBarIncludeNone=-4142
+Const xlErrorBarIncludePlusValues=2
+Const xlErrorBars=9
+Const xlErrorBarTypeCustom=-4114
+Const xlErrorBarTypeFixedValue=1
+Const xlErrorBarTypePercent=2
+Const xlErrorBarTypeStDev=-4155
+Const xlErrorBarTypeStError=4
+Const xlErrorHandler=2
+Const xlErrors=16
+Const xlErrRef=2023
+Const xlErrValue=2015
+Const xlExcel2=16
+Const xlExcel2FarEast=27
+Const xlExcel3=29
+Const xlExcel4=33
+Const xlExcel4IntlMacroSheet=4
+Const xlExcel4MacroSheet=3
+Const xlExcel4Workbook=35
+Const xlExcel5=39
+Const xlExcel7=39
+Const xlExcel9795=43
+Const xlExcelLinks=1
+Const xlExcelMenus=1
+Const xlExclusive=3
+Const xlExponential=5
+Const xlExpression=2
+Const xlExtended=3
+Const xlExternal=2
+Const xlFill=5
+Const xlFillCopy=1
+Const xlFillDays=5
+Const xlFillDefault=0
+Const xlFillFormats=3
+Const xlFillMonths=7
+Const xlFillSeries=2
+Const xlFillValues=4
+Const xlFillWeekdays=6
+Const xlFillWithAll=-4104
+Const xlFillWithContents=2
+Const xlFillWithFormats=-4122
+Const xlFillYears=8
+Const xlFilterCopy=2
+Const xlFilterInPlace=1
+Const xlFirst=0
+Const xlFitToPage=2
+Const xlFixedValue=1
+Const xlFixedWidth=2
+Const xlFloating=5
+Const xlFloor=23
+Const xlFormats=-4122
+Const xlFormula=5
+Const xlFormulas=-4123
+Const xlFreeFloating=3
+Const xlFront=4
+Const xlFrontEnd=6
+Const xlFrontSides=5
+Const xlFullPage=3
+Const xlFunction=1
+Const xlGeneral=1
+Const xlGeneralFormatName=26
+Const xlGray16=17
+Const xlGray25=-4124
+Const xlGray50=-4125
+Const xlGray75=-4126
+Const xlGray8=18
+Const xlGreater=5
+Const xlGreaterEqual=7
+Const xlGregorian=2
+Const xlGrid=15
+Const xlGridline=22
+Const xlGroupBox=4
+Const xlGrowth=2
+Const xlGrowthTrend=10
+Const xlGuess=0
+Const xlHairline=1
+Const xlHAlignCenter=-4108
+Const xlHAlignCenterAcrossSelection=7
+Const xlHAlignDistributed=-4117
+Const xlHAlignFill=5
+Const xlHAlignGeneral=1
+Const xlHAlignJustify=-4130
+Const xlHAlignLeft=-4131
+Const xlHAlignRight=-4152
+Const xlHGL=6
+Const xlHidden=0
+Const xlHide=3
+Const xlHigh=-4127
+Const xlHiLoLines=25
+Const xlHindiNumerals=3
+Const xlHiragana=2
+Const xlHorizontal=-4128
+Const xlHourCode=22
+Const xlIBeam=3
+Const xlIcons=1
+Const xlIMEModeAlpha=8
+Const xlIMEModeAlphaFull=7
+Const xlIMEModeDisable=3
+Const xlIMEModeHangul=10
+Const xlIMEModeHangulFull=9
+Const xlIMEModeHiragana=4
+Const xlIMEModeKatakana=5
+Const xlIMEModeKatakanaHalf=6
+Const xlIMEModeNoControl=0
+Const xlIMEModeOff=2
+Const xlIMEModeOn=1
+Const xlImmediatePane=12
+Const xlIndex=9
+Const xlInfo=-4129
+Const xlInsertDeleteCells=1
+Const xlInsertEntireRows=2
+Const xlInside=2
+Const xlInsideHorizontal=12
+Const xlInsideVertical=11
+Const xlInteger=2
+Const xlInterpolated=3
+Const xlInterrupt=1
+Const xlIntlAddIn=26
+Const xlIntlMacro=25
+Const xlJustify=-4130
+Const xlKatakana=1
+Const xlKatakanaHalf=0
+Const xlLabel=5
+Const xlLabelOnly=1
+Const xlLabelPositionAbove=0
+Const xlLabelPositionBelow=1
+Const xlLabelPositionBestFit=5
+Const xlLabelPositionCenter=-4108
+Const xlLabelPositionCustom=7
+Const xlLabelPositionInsideBase=4
+Const xlLabelPositionInsideEnd=3
+Const xlLabelPositionLeft=-4131
+Const xlLabelPositionMixed=6
+Const xlLabelPositionOutsideEnd=2
+Const xlLabelPositionRight=-4152
+Const xlLandscape=2
+Const xlLast=1
+Const xlLastCell=11
+Const xlLatin=-5001
+Const xlLeaderLines=29
+Const xlLeft=-4131
+Const xlLeftBrace=12
+Const xlLeftBracket=10
+Const xlLeftToRight=2
+Const xlLegend=24
+Const xlLegendEntry=12
+Const xlLegendKey=13
+Const xlLegendPositionBottom=-4107
+Const xlLegendPositionCorner=2
+Const xlLegendPositionLeft=-4131
+Const xlLegendPositionRight=-4152
+Const xlLegendPositionTop=-4160
+Const xlLess=6
+Const xlLessEqual=8
+Const xlLightDown=13
+Const xlLightHorizontal=11
+Const xlLightUp=14
+Const xlLightVertical=12
+Const xlLine=4
+Const xlLinear=-4132
+Const xlLinearTrend=9
+Const xlLineMarkers=65
+Const xlLineMarkersStacked=66
+Const xlLineMarkersStacked100=67
+Const xlLineStacked=63
+Const xlLineStacked100=64
+Const xlLineStyleNone=-4142
+Const xlLinkInfoOLELinks=2
+Const xlLinkInfoPublishers=5
+Const xlLinkInfoSubscribers=6
+Const xlLinkTypeExcelLinks=1
+Const xlLinkTypeOLELinks=2
+Const xlList1=10
+Const xlList2=11
+Const xlList3=12
+Const xlListBox=6
+Const xlListSeparator=5
+Const xlLocalFormat1=15
+Const xlLocalFormat2=16
+Const xlLocalSessionChanges=2
+Const xlLocationAsNewSheet=1
+Const xlLocationAsObject=2
+Const xlLocationAutomatic=3
+Const xlLogarithmic=-4133
+Const xlLogical=4
+Const xlLogicalCursor=1
+Const xlLong=3
+Const xlLotusHelp=2
+Const xlLow=-4134
+Const xlLowerCaseColumnLetter=9
+Const xlLowerCaseRowLetter=8
+Const xlLTR=-5003
+Const xlMacintosh=1
+Const xlMacrosheetCell=7
+Const xlMajorGridlines=15
+Const xlManual=-4135
+Const xlManualUpdate=5
+Const xlMAPI=1
+Const xlMarkerStyleAutomatic=-4105
+Const xlMarkerStyleCircle=8
+Const xlMarkerStyleDash=-4115
+Const xlMarkerStyleDiamond=2
+Const xlMarkerStyleDot=-4118
+Const xlMarkerStyleNone=-4142
+Const xlMarkerStylePicture=-4147
+Const xlMarkerStylePlus=9
+Const xlMarkerStyleSquare=1
+Const xlMarkerStyleStar=5
+Const xlMarkerStyleTriangle=3
+Const xlMarkerStyleX=-4168
+Const xlMax=-4136
+Const xlMaximized=-4137
+Const xlMaximum=2
+Const xlMDY=44
+Const xlMedium=-4138
+Const xlMetric=35
+Const xlMicrosoftAccess=4
+Const xlMicrosoftFoxPro=5
+Const xlMicrosoftMail=3
+Const xlMicrosoftPowerPoint=2
+Const xlMicrosoftProject=6
+Const xlMicrosoftSchedulePlus=7
+Const xlMicrosoftWord=1
+Const xlMin=-4139
+Const xlMinimized=-4140
+Const xlMinimum=4
+Const xlMinorGridlines=16
+Const xlMinusValues=3
+Const xlMinuteCode=23
+Const xlMixed=2
+Const xlMixedLabels=3
+Const xlModule=-4141
+Const xlMonth=3
+Const xlMonthCode=20
+Const xlMonthLeadingZero=41
+Const xlMonthNameChars=30
+Const xlMonths=1
+Const xlMove=2
+Const xlMoveAndSize=1
+Const xlMovingAvg=6
+Const xlMSDOS=3
+Const xlMultiply=4
+Const xlNarrow=1
+Const xlNext=1
+Const xlNextToAxis=4
+Const xlNo=2
+Const xlNoAdditionalCalculation=-4143
+Const xlNoButton=0
+Const xlNoButtonChanges=1
+Const xlNoCap=2
+Const xlNoChange=1
+Const xlNoChanges=4
+Const xlNoConversion=3
+Const xlNoDockingChanges=3
+Const xlNoDocuments=3
+Const xlNoIndicator=0
+Const xlNoLabels=-4142
+Const xlNoMailSystem=0
+Const xlNoncurrencyDigits=29
+Const xlNone=-4142
+Const xlNonEnglishFunctions=34
+Const xlNoRestrictions=0
+Const xlNormal=-4143
+Const xlNormalView=1
+Const xlNorthwestArrow=1
+Const xlNoSelection=-4142
+Const xlNoShapeChanges=2
+Const xlNotBetween=2
+Const xlNotEqual=4
+Const xlNotes=-4144
+Const xlNothing=28
+Const xlNotPlotted=1
+Const xlNotXLM=3
+Const xlNotYetReviewed=3
+Const xlNotYetRouted=0
+Const xlNumber=-4145
+Const xlNumbers=1
+Const xlOff=-4146
+Const xlOLEControl=2
+Const xlOLEEmbed=1
+Const xlOLELink=0
+Const xlOLELinks=2
+Const xlOn=1
+Const xlOneAfterAnother=1
+Const xlOpaque=3
+Const xlOpen=2
+Const xlOpenSource=3
+Const xlOptionButton=7
+Const xlOr=2
+Const xlOrigin=3
+Const xlOtherSessionChanges=3
+Const xlOutside=3
+Const xlOverThenDown=2
+Const xlOverwriteCells=0
+Const xlPageBreakAutomatic=-4105
+Const xlPageBreakFull=1
+Const xlPageBreakManual=-4135
+Const xlPageBreakPartial=2
+Const xlPageBreakPreview=2
+Const xlPageField=3
+Const xlPageHeader=2
+Const xlPageItem=6
+Const xlPaper10x14=16
+Const xlPaper11x17=17
+Const xlPaperA3=8
+Const xlPaperA4=9
+Const xlPaperA4Small=10
+Const xlPaperA5=11
+Const xlPaperB4=12
+Const xlPaperB5=13
+Const xlPaperCsheet=24
+Const xlPaperDsheet=25
+Const xlPaperEnvelope10=20
+Const xlPaperEnvelope11=21
+Const xlPaperEnvelope12=22
+Const xlPaperEnvelope14=23
+Const xlPaperEnvelope9=19
+Const xlPaperEnvelopeB4=33
+Const xlPaperEnvelopeB5=34
+Const xlPaperEnvelopeB6=35
+Const xlPaperEnvelopeC3=29
+Const xlPaperEnvelopeC4=30
+Const xlPaperEnvelopeC5=28
+Const xlPaperEnvelopeC6=31
+Const xlPaperEnvelopeC65=32
+Const xlPaperEnvelopeDL=27
+Const xlPaperEnvelopeItaly=36
+Const xlPaperEnvelopeMonarch=37
+Const xlPaperEnvelopePersonal=38
+Const xlPaperEsheet=26
+Const xlPaperExecutive=7
+Const xlPaperFanfoldLegalGerman=41
+Const xlPaperFanfoldStdGerman=40
+Const xlPaperFanfoldUS=39
+Const xlPaperFolio=14
+Const xlPaperLedger=4
+Const xlPaperLegal=5
+Const xlPaperLetter=1
+Const xlPaperLetterSmall=2
+Const xlPaperNote=18
+Const xlPaperQuarto=15
+Const xlPaperStatement=6
+Const xlPaperTabloid=3
+Const xlPaperUser=256
+Const xlParamTypeBigInt=-5
+Const xlParamTypeBinary=-2
+Const xlParamTypeBit=-7
+Const xlParamTypeChar=1
+Const xlParamTypeDate=9
+Const xlParamTypeDecimal=3
+Const xlParamTypeDouble=8
+Const xlParamTypeFloat=6
+Const xlParamTypeInteger=4
+Const xlParamTypeLongVarBinary=-4
+Const xlParamTypeLongVarChar=-1
+Const xlParamTypeNumeric=2
+Const xlParamTypeReal=7
+Const xlParamTypeSmallInt=5
+Const xlParamTypeTime=10
+Const xlParamTypeTimestamp=11
+Const xlParamTypeTinyInt=-6
+Const xlParamTypeUnknown=0
+Const xlParamTypeVarBinary=-3
+Const xlParamTypeVarChar=12
+Const xlPart=2
+Const xlPartial=3
+Const xlPasteAll=-4104
+Const xlPasteAllExceptBorders=6
+Const xlPasteComments=-4144
+Const xlPasteFormats=-4122
+Const xlPasteFormulas=-4123
+Const xlPasteSpecialOperationAdd=2
+Const xlPasteSpecialOperationDivide=5
+Const xlPasteSpecialOperationMultiply=4
+Const xlPasteSpecialOperationNone=-4142
+Const xlPasteSpecialOperationSubtract=3
+Const xlPasteValues=-4163
+Const xlPatternAutomatic=-4105
+Const xlPatternChecker=9
+Const xlPatternCrissCross=16
+Const xlPatternDown=-4121
+Const xlPatternGray16=17
+Const xlPatternGray25=-4124
+Const xlPatternGray50=-4125
+Const xlPatternGray75=-4126
+Const xlPatternGray8=18
+Const xlPatternGrid=15
+Const xlPatternHorizontal=-4128
+Const xlPatternLightDown=13
+Const xlPatternLightHorizontal=11
+Const xlPatternLightUp=14
+Const xlPatternLightVertical=12
+Const xlPatternNone=-4142
+Const xlPatternSemiGray75=10
+Const xlPatternSolid=1
+Const xlPatternUp=-4162
+Const xlPatternVertical=-4166
+Const xlPCT=13
+Const xlPCX=10
+Const xlPercent=2
+Const xlPercentDifferenceFrom=4
+Const xlPercentOf=3
+Const xlPercentOfColumn=7
+Const xlPercentOfRow=6
+Const xlPercentOfTotal=8
+Const xlPhoneticAlignCenter=2
+Const xlPhoneticAlignDistributed=3
+Const xlPhoneticAlignLeft=1
+Const xlPhoneticAlignNoControl=0
+Const xlPIC=11
+Const xlPICT=1
+Const xlPicture=-4147
+Const xlPie=5
+Const xlPieExploded=69
+Const xlPieOfPie=68
+Const xlPinYin=1
+Const xlPivotTable=-4148
+Const xlPlaceholders=2
+Const xlPlotArea=19
+Const xlPLT=12
+Const xlPlus=9
+Const xlPlusValues=2
+Const xlPolynomial=3
+Const xlPortrait=1
+Const xlPower=4
+Const xlPowerTalk=2
+Const xlPrevious=2
+Const xlPrimary=1
+Const xlPrimaryButton=1
+Const xlPrinter=2
+Const xlPrintInPlace=16
+Const xlPrintNoComments=-4142
+Const xlPrintSheetEnd=1
+Const xlPriorityHigh=-4127
+Const xlPriorityLow=-4134
+Const xlPriorityNormal=-4143
+Const xlProduct=-4149
+Const xlPrompt=0
+Const xlPublisher=1
+Const xlPublishers=5
+Const xlPyramidBarClustered=109
+Const xlPyramidBarStacked=110
+Const xlPyramidBarStacked100=111
+Const xlPyramidCol=112
+Const xlPyramidColClustered=106
+Const xlPyramidColStacked=107
+Const xlPyramidColStacked100=108
+Const xlPyramidToMax=2
+Const xlPyramidToPoint=1
+Const xlR1C1=-4150
+Const xlRadar=-4151
+Const xlRadarAxisLabels=27
+Const xlRadarFilled=82
+Const xlRadarMarkers=81
+Const xlRange=2
+Const xlRangeAutoFormat3DEffects1=13
+Const xlRangeAutoFormat3DEffects2=14
+Const xlRangeAutoFormatAccounting1=4
+Const xlRangeAutoFormatAccounting2=5
+Const xlRangeAutoFormatAccounting3=6
+Const xlRangeAutoFormatAccounting4=17
+Const xlRangeAutoFormatClassic1=1
+Const xlRangeAutoFormatClassic2=2
+Const xlRangeAutoFormatClassic3=3
+Const xlRangeAutoFormatColor1=7
+Const xlRangeAutoFormatColor2=8
+Const xlRangeAutoFormatColor3=9
+Const xlRangeAutoFormatList1=10
+Const xlRangeAutoFormatList2=11
+Const xlRangeAutoFormatList3=12
+Const xlRangeAutoFormatLocalFormat1=15
+Const xlRangeAutoFormatLocalFormat2=16
+Const xlRangeAutoFormatLocalFormat3=19
+Const xlRangeAutoFormatLocalFormat4=20
+Const xlRangeAutoFormatNone=-4142
+Const xlRangeAutoFormatSimple=-4154
+Const xlReadOnly=3
+Const xlReadWrite=2
+Const xlReference=4
+Const xlRelative=4
+Const xlRelRowAbsColumn=3
+Const xlRight=-4152
+Const xlRightBrace=13
+Const xlRightBracket=11
+Const xlRoutingComplete=2
+Const xlRoutingInProgress=1
+Const xlRowField=1
+Const xlRowHeader=-4153
+Const xlRowItem=4
+Const xlRowLabels=1
+Const xlRows=1
+Const xlRowSeparator=15
+Const xlRowThenColumn=1
+Const xlRTF=4
+Const xlRTL=-5004
+Const xlRunningTotal=5
+Const xlSaveChanges=1
+Const xlScale=3
+Const xlScaleLinear=-4132
+Const xlScaleLogarithmic=-4133
+Const xlScreen=1
+Const xlScreenSize=1
+Const xlScrollBar=8
+Const xlSecondary=2
+Const xlSecondaryButton=2
+Const xlSecondCode=24
+Const xlSelect=3
+Const xlSemiautomatic=2
+Const xlSemiGray75=10
+Const xlSendPublisher=2
+Const xlSeries=3
+Const xlSeriesAxis=3
+Const xlSeriesLines=22
+Const xlShape=14
+Const xlShared=2
+Const xlSheetHidden=0
+Const xlSheetVeryHidden=2
+Const xlSheetVisible=-1
+Const xlShiftDown=-4121
+Const xlShiftToLeft=-4159
+Const xlShiftToRight=-4161
+Const xlShiftUp=-4162
+Const xlShort=1
+Const xlShowLabel=4
+Const xlShowLabelAndPercent=5
+Const xlShowPercent=3
+Const xlShowValue=2
+Const xlSides=1
+Const xlSimple=-4154
+Const xlSinceMyLastSave=1
+Const xlSingle=2
+Const xlSingleAccounting=4
+Const xlSingleQuote=2
+Const xlSizeIsArea=1
+Const xlSizeIsWidth=2
+Const xlSlantDashDot=13
+Const xlSolid=1
+Const xlSortColumns=1
+Const xlSortLabels=2
+Const xlSortRows=2
+Const xlSortValues=1
+Const xlSpinner=9
+Const xlSplitByCustomSplit=4
+Const xlSplitByPercentValue=3
+Const xlSplitByPosition=1
+Const xlSplitByValue=2
+Const xlSquare=1
+Const xlStack=2
+Const xlStackScale=3
+Const xlStandardSummary=1
+Const xlStar=5
+Const xlStDev=-4155
+Const xlStDevP=-4156
+Const xlStError=4
+Const xlStockHLC=88
+Const xlStockOHLC=89
+Const xlStockVHLC=90
+Const xlStockVOHLC=91
+Const xlStretch=1
+Const xlStrict=2
+Const xlStroke=2
+Const xlSubscriber=2
+Const xlSubscribers=6
+Const xlSubscribeToPicture=-4147
+Const xlSubscribeToText=-4158
+Const xlSubtract=3
+Const xlSum=-4157
+Const xlSummaryAbove=0
+Const xlSummaryBelow=1
+Const xlSummaryOnLeft=-4131
+Const xlSummaryOnRight=-4152
+Const xlSummaryPivotTable=-4148
+Const xlSurface=83
+Const xlSurfaceTopView=85
+Const xlSurfaceTopViewWireframe=86
+Const xlSurfaceWireframe=84
+Const xlSYLK=2
+Const xlSyllabary=1
+Const xlSystem=1
+Const xlTableBody=8
+Const xlTabPositionFirst=0
+Const xlTabPositionLast=1
+Const xlTemplate=17
+Const xlText=-4158
+Const xlTextBox=16
+Const xlTextMac=19
+Const xlTextMSDOS=21
+Const xlTextPrinter=36
+Const xlTextQualifierDoubleQuote=1
+Const xlTextQualifierNone=-4142
+Const xlTextQualifierSingleQuote=2
+Const xlTextValues=2
+Const xlTextWindows=20
+Const xlThick=4
+Const xlThin=2
+Const xlThousandsSeparator=4
+Const xlTickLabelOrientationAutomatic=-4105
+Const xlTickLabelOrientationDownward=-4170
+Const xlTickLabelOrientationHorizontal=-4128
+Const xlTickLabelOrientationUpward=-4171
+Const xlTickLabelOrientationVertical=-4166
+Const xlTickLabelPositionHigh=-4127
+Const xlTickLabelPositionLow=-4134
+Const xlTickLabelPositionNextToAxis=4
+Const xlTickLabelPositionNone=-4142
+Const xlTickMarkCross=4
+Const xlTickMarkInside=2
+Const xlTickMarkNone=-4142
+Const xlTickMarkOutside=3
+Const xlTIF=9
+Const xlTiled=1
+Const xlTimeLeadingZero=45
+Const xlTimeScale=3
+Const xlTimeSeparator=18
+Const xlTitleBar=8
+Const xlToLeft=-4159
+Const xlToolbar=1
+Const xlToolbarButton=2
+Const xlToolbarProtectionNone=-4143
+Const xlTop=-4160
+Const xlTop10Items=3
+Const xlTop10Percent=5
+Const xlTopToBottom=1
+Const xlToRight=-4161
+Const xlTransparent=2
+Const xlTrendline=8
+Const xlTriangle=3
+Const xlUnderlineStyleDouble=-4119
+Const xlUnderlineStyleDoubleAccounting=5
+Const xlUnderlineStyleNone=-4142
+Const xlUnderlineStyleSingle=2
+Const xlUnderlineStyleSingleAccounting=4
+Const xlUnlockedCells=1
+Const xlUp=-4162
+Const xlUpBars=18
+Const xlUpdateState=1
+Const xlUpdateSubscriber=2
+Const xlUpperCaseColumnLetter=7
+Const xlUpperCaseRowLetter=6
+Const xlUpward=-4171
+Const xlUserDefined=22
+Const xlUserResolution=1
+Const xlValidAlertInformation=3
+Const xlValidAlertStop=1
+Const xlValidAlertWarning=2
+Const xlValidateCustom=7
+Const xlValidateDate=4
+Const xlValidateDecimal=2
+Const xlValidateInputOnly=0
+Const xlValidateList=3
+Const xlValidateTextLength=6
+Const xlValidateTime=5
+Const xlValidateWholeNumber=1
+Const xlVAlignBottom=-4107
+Const xlVAlignCenter=-4108
+Const xlVAlignDistributed=-4117
+Const xlVAlignJustify=-4130
+Const xlVAlignTop=-4160
+Const xlVALU=8
+Const xlValue=2
+Const xlValues=-4163
+Const xlVar=-4164
+Const xlVarP=-4165
+Const xlVerbOpen=2
+Const xlVerbPrimary=1
+Const xlVertical=-4166
+Const xlVeryHidden=2
+Const xlVisible=12
+Const xlVisualCursor=2
+Const xlWait=2
+Const xlWalls=5
+Const xlWatchPane=11
+Const xlWBATChart=-4109
+Const xlWBATExcel4IntlMacroSheet=4
+Const xlWBATExcel4MacroSheet=3
+Const xlWBATWorksheet=-4167
+Const xlWeekday=2
+Const xlWeekdayNameChars=31
+Const xlWhole=1
+Const xlWide=3
+Const xlWindows=2
+Const xlWJ2WD1=14
+Const xlWJ3=40
+Const xlWJ3FJ3=41
+Const xlWK1=5
+Const xlWK1ALL=31
+Const xlWK1FMT=30
+Const xlWK3=15
+Const xlWK3FM3=32
+Const xlWK4=38
+Const xlWKS=4
+Const xlWMF=2
+Const xlWorkbook=1
+Const xlWorkbookNormal=-4143
+Const xlWorkbookTab=6
+Const xlWorks2FarEast=28
+Const xlWorksheet=-4167
+Const xlWorksheet4=1
+Const xlWorksheetCell=3
+Const xlWorksheetShort=5
+Const xlWPG=3
+Const xlWQ1=34
+Const xlX=-4168
+Const xlXErrorBars=10
+Const xlXYScatter=-4169
+Const xlXYScatterLines=74
+Const xlXYScatterLinesNoMarkers=75
+Const xlXYScatterSmooth=72
+Const xlXYScatterSmoothNoMarkers=73
+Const xlY=1
+Const xlYear=4
+Const xlYearCode=19
+Const xlYears=2
+Const xlYErrorBars=11
+Const xlYes=1
+Const xlZero=2
+Sub Initialize
+	Set xlsess = New notessession
+	Set xldb = xlsess.CurrentDatabase
+	
+	xlerrorstub = xldb.Title & ". Script Library Excel. Sub/function "	
+End Sub
+Sub inqbyyear(doc As NotesDocument)
+' NOTE THAT THE OPTION BASE 1 IS ON, ALTHOUGH THIS IS GENERALLY VERY ANNOYING, EXCEL WORKS ON THIS BASE
+' AND OVERALL IT IS EASIER TO GO ALONG WITH IT    DJS	MAY 2012
+	On Error Goto errhandle
+	Dim ws As New NotesUIWorkspace
+	Dim sess As New NotesSession
+	Dim db As NotesDatabase
+	Dim dc As NotesDocumentCollection
+	Dim inqdoc As NotesDocument
+	Dim searchstring As String
+	Dim chartinquiry As String
+	Dim chartyear As String
+	Dim yearstart As String
+	Dim yearend As String
+	Dim inqcode As String
+	Dim period As String
+	Dim mm As String
+	Dim qtr As String
+	Dim qtrstart As String
+	Dim qtrend As String
+	Dim lastday As String
+	Dim blurb As String
+	Dim workflowstatuses(6) As String
+	Dim  workflowstatuscount(6) As Integer
+	Dim idx As Integer
+	Dim statushistory As Variant
+	Dim statushistorydates As Variant 
+	Dim retval As Variant
+	Dim xyz As Long
+	
+	xlerrortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	Call initlog("Excel Chart By Period Enforced") ' SET UP LOGGING WITH A REFERENCE/NAME
+	
+	Print Time$ & " " & xlerrorstub & xlerrortext 
+	
+'Create the progress bar
+	hwnd = NEMProgressBegin(NPB_TWOLINE)
+'Set the bar range - the default is 100
+	NEMProgressSetBarRange hwnd, 100
+	NEMProgressSetBarPos hwnd, 10
+	
+	Call logaction("Building the workflow status array")
+	
+' These are the statuses that we care about in the Excel report in question	
+	workflowstatuses(1)  = "New"
+	workflowstatuses(2)  = "Approved"
+	workflowstatuses(3)  = "Questionnaire Issued"
+	workflowstatuses(4)  = "Warning Letter Issued"
+	workflowstatuses(5)  = "Final Warning Letter Issued"
+	workflowstatuses(6)  = "Awaiting Court Action"
+	
+	Call logaction("Detect inquiry parameters")
+	
+	If (doc.chartinquiry(0) <> "") Then
+		chartinquiry = doc.chartinquiry(0)
+		If(Mid$(chartinquiry,4,1) = ".") Then
+			inqcode = Left$(chartinquiry,5)
+		Else
+			inqcode = Left$(chartinquiry,3)
+		End If
+	End If
+	
+	chartyear = doc.chartyear(0)
+	
+	Call logaction("Taking the input year " & chartyear & " optional month " & doc.chartmonth(0)  & " and reformatting")
+	
+' THE DEFAULT ASSUMING ONLY YEAR IS CHOSEN	
+	yearstart = "01/01/" & chartyear
+	yearend = "31/12/" & chartyear
+	
+	If(doc.chartmonth(0) <> "") Then   ' IF PUNTER WANTS MONTH
+		mm = doc.chartmonth(0)
+		Select Case mm                        '  SIGH, I JUST CAN'T BELIEVE I'M DOING THIS, CAN'T BE BOTHERED TO THINK OF A BETTER WAY
+		Case "01" : lastday = "31"
+		Case "02" : lastday = "28"           ' I CAN LIVE WITH MISSING LEAP DAYS
+		Case "03" : lastday = "31"
+		Case "04" : lastday = "30"
+		Case "05" : lastday = "31"
+		Case "06" : lastday = "30"
+		Case "07" : lastday = "31"
+		Case "08" : lastday = "31"
+		Case "09" : lastday = "30"
+		Case "10" : lastday = "31"
+		Case "11" : lastday = "30"
+		Case "12" : lastday = "31"
+		End Select
+		yearstart = "01/" & mm & "/" & chartyear                    ' OBVIOUSLY YEARSTART AND YEAREND ARE MISNOMERS HERE BUT GOT BOLTED ON LATER
+		yearend = lastday &"/" & mm & "/" & chartyear
+	Else
+		If(doc.chartquarter(0) <> "") Then      ' IF PUNTER WANTS QUARTER
+			qtr = doc.chartquarter(0) 
+			Select Case qtr                        '  SIGH, I JUST CAN'T BELIEVE I'M DOING THIS, CAN'T BE BOTHERED TO THINK OF A BETTER WAY
+			Case "1" : lastday = "31"
+				qtrend = "03"
+				qtrstart = "01"
+			Case "2" : lastday = "30"
+				qtrend = "06"
+				qtrstart = "04"
+			Case "3" : lastday = "30"
+				qtrend = "09"
+				qtrstart = "07"
+			Case "4" : lastday = "31"
+				qtrend = "12"
+				qtrstart = "10"
+			End Select 
+			yearstart = "01/" & qtrstart & "/" & chartyear                    ' OBVIOUSLY YEARSTART AND YEAREND ARE MISNOMERS HERE BUT GOT BOLTED ON LATER
+			yearend = lastday &"/" & qtrend & "/" & chartyear
+		End If
+	End If
+	
+	Call logaction("The reformatted dates requested are " & yearstart & "  to "  &  yearend)
+	
+	' date is the created date of the form
+' inquiry_code is the 3 digit inquiry_code on the form	
+' HAVE TO USE THE COMPUTED PERIODDATE AS THE STATS ARE BASED ON PERIOD NOT CREATED DATE	DJS 04/04/2012
+	
+	Call logaction("Building the searchstring")
+	
+	If (doc.chartinquiry(0) <> "") Then
+		searchstring = |Form="enforcement" & perioddate >= @texttotime("| & yearstart & |") & perioddate =< @texttotime("| & yearend & |") & inquiry_code = "| & inqcode & |"|
+	Else
+		searchstring = |Form="enforcement" & perioddate >= @texttotime("| & yearstart & |") & perioddate =< @texttotime("| & yearend & |")|		' ALLOW FOR ALL INQS
+	End If
+	
+	Print Time$ & " Collecting the data " & searchstring & " " & xlerrorstub & xlerrortext 	
+	doc.searchstring = searchstring
+	doc.ExcelReport = "inqbyyear"
+	doc.Actionpressed = "Chart By Period Enforced"
+	
+	NEMProgressSetBarPos hwnd, 20
+	If(doc.chartquarter(0) <> "") Then
+		blurb = inqcode & " For Year " & chartyear & " Quarter " & qtr
+	Else
+		blurb = inqcode & " For Period " & chartyear & doc.chartmonth(0)
+	End If
+	
+	NEMProgressSetText hwnd, Time$ & " Gathering data on Inquiry " & blurb  ,""
+	
+	Call logaction("Running db.search " & searchstring)
+	Set dc = xldb.Search(searchstring,Nothing,0)
+	Call logaction("db.search completed, found " & Cstr(dc.Count))
+	
+	If(dc.Count = 0) Then
+		NEMProgressEnd hwnd
+'		Messagebox "No documents exist for " & searchstring,16,xlerrorstub & xlerrortext 
+		Messagebox "No documents exist for the dates requested",16,xlerrorstub & xlerrortext 
+		Call logaction("Exiting, No documents exist for the dates requested " & yearstart & "  to "  &  yearend)
+		Call logclose("Ends")
+		Exit Sub
+	End If
+	
+	NEMProgressSetBarPos hwnd, 90
+	NEMProgressSetText hwnd, Time$ & " " & Cstr(dc.count) & " Documents found for Inquiry " & blurb  ,""
+	
+	workflowstatuscount(1) = dc.count     ' Set the "New" Count
+	
+	Set inqdoc = dc.GetFirstDocument
+	While Not inqdoc Is Nothing
+		statushistory = inqdoc.statushistory
+		statushistorydates = inqdoc.statushistorydates
+		
+		For idx = 2 To 6                                   ' Work through the statuses after New
+			retval = Arraygetindex(statushistory,workflowstatuses(idx))   ' Find the status in the document status history
+			If Not Isnull(retval) Then 
+' At a meeting on 17th May 2012 it was agreed that we only concern ourselves with the period the enforcement is for matching the incoming date
+' parameters and not the subsequent dates of the individual Workflow stages. Therefore if we input 2012 Month 6 at the Excel parameters form that
+' calls this code we want to see counts for everything with that enforcement period irrespective of when each workflow stage counted is reached 
+' The previous code commented out below checked that each workflow status counted was in the same period  DJS 18/05/2012				
+				
+' REMOVED 18/05/2012 SEE COMMENTS ABOVE DJS   If(Cdat(statushistorydates(retval)) >= Cdat(yearstart) And Cdat(statushistorydates(retval)) <= Cdat(yearend)) Then
+				workflowstatuscount(idx) = workflowstatuscount(idx) + 1
+' REMOVED 18/05/2012 				End If
+			End If
+		Next
+		
+		Set inqdoc = dc.GetnextDocument(inqdoc)
+	Wend
+	
+' WRITE BACK TO THE DOC
+	doc.workflowstatuses = workflowstatuses
+	doc.workflowstatuscount = workflowstatuscount
+	doc.datagathered = Now
+	
+'Destroy the progress bar when we're done
+	NEMProgressEnd hwnd
+	Call logaction("Charting the data")
+	Call logclose("Ends")
+	Call chart_enforce(workflowstatuses,workflowstatuscount,doc )
+	
+	Exit Sub
+errhandle:
+' LOG ERRORS
+	NEMProgressEnd hwnd
+	Call logerror(Err, Error, Erl, Lsi_info(2), Lsi_info(12),  "Error handler called") 
+	Exit Sub
+End Sub
+Function chart_enforce(labels() As String,totals() As Integer,doc As NotesDocument)
+	Dim papersizechoice As Integer
+	Dim paperorient As Integer
+	Dim CountUnique As Integer
+	Dim x As Integer
+	Dim v As Integer
+	Dim y As Integer
+	Dim j As Integer
+	Dim counter As Integer
+	Dim cnt As Integer
+	Dim row As Integer
+	Dim charttitle As String
+	Dim chartchoice As String
+	Dim charttype As String
+	Dim Alphabet1 As String
+	Dim Alphabet2 As String
+	Dim HackedAlpha1 As String
+	Dim HackedAlpha2 As String
+	Dim xlApp As Variant
+	Dim xlsheet As Variant
+	Dim xlrowcol As Variant
+	Dim tchart As Variant
+	
+	xlerrortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 	
+	
+	Print Time$ & " " & xlerrorstub & xlerrortext 
+	
+	If(doc.ExcelReport(0) = "inqbyyear") Then
+		charttitle = doc.charttitle(0) &  " (For period enforced)"    ' title suffix distinguishes between the actions pressed DJS 21/01/2013
+	Else
+		If (doc.ExcelReport(0) = "statuscount") Then
+			charttitle = doc.charttitle(0) & " (For all actions in the period)"    ' title suffix distinguishes between the actions pressed DJS 21/01/2013
+		Else
+			If (doc.ExcelReport(0) = "sizeband1") Then
+				charttitle = doc.charttitle(0) & " (Sizeband by period enforced)"  
+			End If
+		End If
+	End If
+	chartchoice = doc.chartchoice(0)
+'	charttype = doc.charttype(0) ' Don't think this is used on the form
+	papersizechoice=1
+	paperorient=1
+	
+	Set xlApp = CreateObject("Excel.application")
+	xlApp.Visible = True
+	xlApp.Workbooks.Add
+	Set xlsheet = xlApp.Workbooks(1).Worksheets(1)
+	XlApp.Windows(1).DisplayGridlines=True
+	xlsheet.Name = "Values"
+	
+	'Use the number of elements passed in  to generate excel columns
+	Alphabet1$ = "ABCDEFGHIJKLMNOPQRSTUVWXYZ~"
+	Alphabet2$ = " ABCDEFGHIJKLMNOPQRSTUVWXYZ~"
+	x% = 1
+	HackedAlpha1$ = Alphabet1$
+	HackedAlpha2$ = Alphabet2$
+	Do Until x% > Ubound(labels) + 1     ' Parameter to sub
+		Redim Preserve col(1 To x%) As String
+		col(x%) = Left$(HackedAlpha2$,1)+Left$(HackedAlpha1$,1)
+		HackedAlpha1$ = Right$(HackedAlpha1$,Len(HackedAlpha1$)-1)
+		If HackedAlpha1$ = "~" Then
+			HackedAlpha1$ = Alphabet1$
+			HackedAlpha2$ = Right$(HackedAlpha2$,Len(HackedAlpha2$)-1)
+			If HackedAlpha2$ = "~" Then
+				HackedAlpha2$ = Alphabet2$
+			End If
+		End If
+		x% = x% + 1
+	Loop
+	
+'Make the Excel sheet the active window
+	xlsheet.Activate          
+	xlsheet.PageSetup.CenterHeader = charttitle     
+	row = 2
+	j = 2             'question header row
+	counter =1
+	
+' OUTPUT THE LABELS	
+	For v = Lbound(labels) To Ubound(labels) 
+		xlsheet.Range(col(j)+ Cstr(row)).value = labels(v)
+		j=j+1
+		counter=counter+1             
+	Next 
+	
+	j=2   ' Testing 2 as above rather than 1           
+	cnt = 0
+	
+	xlsheet.Range(col(1)+ Cstr(3)).value = "Totals"
+	
+' OUTPUT THE VALUES
+	For y = Lbound(totals) To Ubound(totals) 
+		If Cnt Mod (Ubound(totals)) = 0 Then
+			j = 2
+			row = row + 1
+		End If
+		xlsheet.Range(col(j)+ Cstr(row)).value = totals(y)
+		j=j+1
+		cnt = cnt + 1        
+	Next 
+	
+	'----------------------------------------------------------------------------------
+	XlApp.range("A2:"+col(Ubound(labels) +1)+Cstr(row)).Select     
+	With XlApp.Selection     
+		.Columns.AutoFit
+		.font.name="Arial"
+		.borders(1).Weight=1
+		.borders(2).Weight=1      
+		.borders(3).Weight=1 
+		.borders(4).Weight=1 
+		.font.bold=False          
+	End With       
+	
+	With XlApp.Range("A2")
+		.value=title  
+		.font.Bold=True
+		.Font.Size=12
+	End With  
+	'----------------------------------------------------------------------------------
+	
+	XlApp.Charts.Add
+	Set tchart = XlApp.Charts("Chart1")
+	If chartchoice <> 999 Then
+		tchart.ChartType = chartchoice
+	End If
+	
+	With tchart
+		.HasTitle = True
+		.ChartTitle.Characters.Text = charttitle & Chr$(10) & "Generated on "& Cstr(Today)
+		.HasLegend = True
+		.ApplyDataLabels
+		
+		If doc.chartstyle(0) = "" Then    ' default Style on form
+			If(doc.ExcelReport(0) = "inqbyyear") Then
+				.ChartStyle = 4   ' Purple on white
+			End If
+			If (doc.ExcelReport(0) = "statuscount") Then    ' Colour the charts differently to tell them apart
+				.ChartStyle = 42   ' Black background with blue
+			End If
+			If (doc.ExcelReport(0) = "sizeband1") Then    ' Colour the charts differently to tell them apart
+				.ChartStyle = 40  ' Orange with background shading   
+			End If
+		Else
+			.ChartStyle = Cint(doc.chartstyle(0))          ' APPLY THE STYLE SELECTED ON FORM IF NOT DEFAULT
+		End If
+	End With 
+	
+End Function
+Sub DoInsertSort ( sA() As String, Byval bottom As Long, Byval top As Long ) 
+	Dim i As Long
+	Dim x As Long
+	Dim v As String
+	Dim Found As Integer
+	For i = bottom+1 To top
+		x = i
+		v = sA (i )
+		
+		Do While (sA(x-1) > v)
+			sA ( x ) = sA ( x-1 )
+			x = x - 1
+'			If x=0 Then
+			If x=1 Then
+				Exit Do
+			End If
+		Loop
+		
+		sA (x) = v
+	Next
+End Sub
+Sub MSOfficePath(Officepath As String)
+	Dim sess As New notessession
+	Dim db As notesdatabase
+	Dim keyName As String
+	Dim subKeyName As String
+	Dim valueName As String
+	Dim officeversions(20) As String
+	Dim officefound As Integer
+	Dim regidx As Integer
+	
+	Set db = sess.currentdatabase
+	
+	officeversions(1) = "1.0"
+	officeversions(2) = "2.0"
+	officeversions(3) = "3.0"
+	officeversions(4) = "4.0"
+	officeversions(5) = "4.1"
+	officeversions(6) = "4.2"
+	officeversions(7) = "4.3"
+	officeversions(8) = "5.0"
+	officeversions(9) = "6.0"
+	officeversions(10) = "7.0"
+	officeversions(11) = "8.0"
+	officeversions(12) = "9.0"
+	officeversions(13) = "10.0"
+	officeversions(14) = "11.0"
+	officeversions(15) = "12.0"
+	officeversions(16) = "13.0"
+	officeversions(17) = "14.0"
+	officeversions(18) = "15.0"
+	officeversions(19) = "16.0"
+	officeversions(20) = "17.0"
+	
+	officefound = 0
+	
+	keyName = "HKEY_LOCAL_MACHINE"
+	valueName = "Path"
+	
+	For regidx = 1 To 20
+		Dim evaldoc As New notesdocument(db)
+		evaldoc.keyName = keyName
+		evaldoc.valueName = valueName
+		
+		subKeyName = "SOFTWARE\Microsoft\Office\" & officeversions(regidx) & "\Excel\InstallRoot"
+		evaldoc.subKeyName = subKeyName
+		Dim regentry As Variant
+		regentry = Evaluate("@RegQueryValue(keyName;subKeyName;valueName)", evaldoc)
+		If(regentry(0) <> "") Then
+			Print "MS Office path " & regentry(0)
+			Officepath = regentry(0)
+			officefound = officefound + 1
+		End If
+	Next
+End Sub
+Function QuickSort(sArray As Variant)
+	Dim sA() As String    
+	Dim j As Long
+	Dim bottom As Long
+	Dim top As Long
+	bottom = Lbound ( sArray )
+	top = Ubound ( sArray )
+	Redim sA( bottom To top ) As String     
+	For j = bottom To top
+		sA ( j ) = sArray ( j )
+	Next
+     ' DoQS does a QuickSort if the Sublist is longer than 10 elements
+     ' Thus, when DoQS finishes, all elements are within 10 spots of their correct location.
+     ' For lists that are close to being in order, an Insertion Sort is much faster than a QuickSort, so we
+     ' run through the whole thing once doing an Insertion Sort to finish tidying up the order.
+	Call DoQS( sA, bottom, top )
+	Call DoInsertSort ( sA, bottom, top )
+	SortedArray = sA
+End Function
+Sub DoQS( sA() As String, bottom As Long, top As Long )
+     ' Called by QuickSort
+     ' Uses Public variable sA  (array of string)
+	Dim length As Long
+	Dim i As Long
+	Dim j As Long
+	Dim Pivot As Long
+	Dim PivotValue As String
+	Dim t As String
+	Dim LastSmall As Long
+	length = top - bottom + 1
+	
+     ' Only do the QuickSort if the sublist is at least 10 items long
+	If length > 10 Then
+          ' Pivot is chosen approx. halfway through sublist.
+          ' This gives us best speed if list is almost sorted already, and is no worse than any
+          ' other choice if the list is in random order.
+		Pivot = bottom + (length \ 2)   
+		
+          ' Move PivotValue out of the way
+		PivotValue = sA( Pivot )
+		sA ( Pivot ) = sA ( bottom )
+		sA ( bottom ) = PivotValue
+		
+          ' LastSmall is the location of the last value smaller than PivotValue
+		LastSmall = bottom
+		For i = bottom + 1 To top 
+			If sA ( i ) < PivotValue Then 
+				LastSmall = LastSmall + 1
+				t = sA ( i )
+				sA ( i ) = sA ( LastSmall )
+				sA ( LastSmall ) = t
+			End If
+		Next
+		
+          ' Move the PivotValue back
+		t = sA ( LastSmall )
+		sA ( LastSmall ) = sA ( bottom )
+		sA ( bottom ) = t
+		Pivot = LastSmall
+		
+          ' Now sort each side
+		Call DoQS ( sA, bottom, Pivot - 1 )
+		Call DoQS ( sA, Pivot + 1, top )
+	End If
+	
+End Sub
+Sub empsizebandcount(doc As NotesDocument)
+' NOTE THAT THE OPTION BASE 1 IS ON, ALTHOUGH THIS IS GENERALLY VERY ANNOYING, EXCEL WORKS ON THIS BASE
+' AND OVERALL IT IS EASIER TO GO ALONG WITH IT    DJS	MAY 2012
+	On Error Goto errhandle
+	Dim ws As New NotesUIWorkspace
+	Dim sess As New NotesSession
+	Dim db As NotesDatabase
+	Dim dc As NotesDocumentCollection
+	Dim keywordsview As notesview
+	Dim keyworddoc As NotesDocument
+	Dim inqdoc As NotesDocument
+	Dim searchstring As String
+	Dim chartinquiry As String
+	Dim chartyear As String
+	Dim yearstart As String
+	Dim yearend As String
+	Dim inqcode As String
+	Dim period As String
+	Dim mm As String
+	Dim qtr As String
+	Dim qtrstart As String
+	Dim qtrend As String
+	Dim lastday As String
+	Dim blurb As String
+	Dim empsizeband As String
+	Dim sizeband() As String
+	Dim empsizebandarraycount() As Integer
+	Dim idx As Integer
+	Dim f As Integer
+	Dim h As Integer
+	Dim empsizebandhistory As Variant
+	Dim empsizebandhistorydates As Variant 
+	Dim empsizebandarray As Variant
+	Dim retval As Variant
+	Dim xyz As Long
+	
+	xlerrortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	Call initlog("Excel Chart Sizeband By Period Enforced") ' SET UP LOGGING WITH A REFERENCE/NAME
+	
+	Print Time$ & " " & xlerrorstub & xlerrortext 
+	
+'Create the progress bar
+	hwnd = NEMProgressBegin(NPB_TWOLINE)
+'Set the bar range - the default is 100
+	NEMProgressSetBarRange hwnd, 100
+	NEMProgressSetBarPos hwnd, 10
+	
+	Call logaction("Finding the empsizebands")
+	Set db = sess.currentdatabase
+	Set keywordsview = db.getview("keywords")
+	Set keyworddoc = keywordsview.getdocumentbykey("Empbands",True)
+	If keyworddoc Is Nothing Then
+		Messagebox "Could not locate the Employment Bands Keyword document, exiting" ,16,xlerrorstub & xlerrortext 
+		Exit Sub
+	End If		
+	
+	empsizebandarray = keyworddoc.keywordname    ' LIST OF EMP SIZEBANDS FROM KEYWORDS DOC
+	Redim empsizebandarraycount(Ubound(empsizebandarray)+1) ' BECAUSE THE empsizebandarray is base zero !
+	
+	Call logaction("Detect inquiry parameters")
+	
+	If (doc.chartinquiry(0) <> "") Then
+		chartinquiry = doc.chartinquiry(0)
+		If(Mid$(chartinquiry,4,1) = ".") Then
+			inqcode = Left$(chartinquiry,5)
+		Else
+			inqcode = Left$(chartinquiry,3)
+		End If
+	End If
+	
+	chartyear = doc.chartyear(0)
+	
+	Call logaction("Taking the input year " & chartyear & " optional month " & doc.chartmonth(0)  & " and reformatting")
+	
+' THE DEFAULT ASSUMING ONLY YEAR IS CHOSEN	
+	yearstart = "01/01/" & chartyear
+	yearend = "31/12/" & chartyear
+	
+	If(doc.chartmonth(0) <> "") Then   ' IF PUNTER WANTS MONTH
+		mm = doc.chartmonth(0)
+		Select Case mm                        '  SIGH, I JUST CAN'T BELIEVE I'M DOING THIS, CAN'T BE BOTHERED TO THINK OF A BETTER WAY
+		Case "01" : lastday = "31"
+		Case "02" : lastday = "28"           ' I CAN LIVE WITH MISSING LEAP DAYS
+		Case "03" : lastday = "31"
+		Case "04" : lastday = "30"
+		Case "05" : lastday = "31"
+		Case "06" : lastday = "30"
+		Case "07" : lastday = "31"
+		Case "08" : lastday = "31"
+		Case "09" : lastday = "30"
+		Case "10" : lastday = "31"
+		Case "11" : lastday = "30"
+		Case "12" : lastday = "31"
+		End Select
+		yearstart = "01/" & mm & "/" & chartyear                    ' OBVIOUSLY YEARSTART AND YEAREND ARE MISNOMERS HERE BUT GOT BOLTED ON LATER
+		yearend = lastday &"/" & mm & "/" & chartyear
+	Else
+		If(doc.chartquarter(0) <> "") Then      ' IF PUNTER WANTS QUARTER
+			qtr = doc.chartquarter(0) 
+			Select Case qtr                        '  SIGH, I JUST CAN'T BELIEVE I'M DOING THIS, CAN'T BE BOTHERED TO THINK OF A BETTER WAY
+			Case "1" : lastday = "31"
+				qtrend = "03"
+				qtrstart = "01"
+			Case "2" : lastday = "30"
+				qtrend = "06"
+				qtrstart = "04"
+			Case "3" : lastday = "30"
+				qtrend = "09"
+				qtrstart = "07"
+			Case "4" : lastday = "31"
+				qtrend = "12"
+				qtrstart = "10"
+			End Select 
+			yearstart = "01/" & qtrstart & "/" & chartyear                    ' OBVIOUSLY YEARSTART AND YEAREND ARE MISNOMERS HERE BUT GOT BOLTED ON LATER
+			yearend = lastday &"/" & qtrend & "/" & chartyear
+		End If
+	End If
+	
+	Call logaction("The reformatted dates requested are " & yearstart & "  to "  &  yearend)
+	
+	' date is the created date of the form
+' inquiry_code is the 3 digit inquiry_code on the form	
+' HAVE TO USE THE COMPUTED PERIODDATE AS THE STATS ARE BASED ON PERIOD NOT CREATED DATE	DJS 04/04/2012
+	
+	Call logaction("Building the searchstring")
+	
+	If (doc.chartinquiry(0) <> "") Then
+		searchstring = |Form="enforcement" & perioddate >= @texttotime("| & yearstart & |") & perioddate =< @texttotime("| & yearend & |") & inquiry_code = "| & inqcode & |"|
+	Else
+		searchstring = |Form="enforcement" & perioddate >= @texttotime("| & yearstart & |") & perioddate =< @texttotime("| & yearend & |")|		' ALLOW FOR ALL INQS
+	End If
+	
+	Print Time$ & " Collecting the data " & searchstring & " " & xlerrorstub & xlerrortext 	
+	doc.searchstring = searchstring
+	doc.ExcelReport = "sizeband1"    ' THIS MAY BE A PARAM FOR THE EXCEL CODE - CHECK 
+	doc.Actionpressed = "Chart Sizeband By Period Enforced"
+	
+	NEMProgressSetBarPos hwnd, 20
+	If(doc.chartquarter(0) <> "") Then
+		blurb = inqcode & " For Year " & chartyear & " Quarter " & qtr
+	Else
+		blurb = inqcode & " For Period " & chartyear & doc.chartmonth(0)
+	End If
+	
+	NEMProgressSetText hwnd, Time$ & " Gathering data on Inquiry " & blurb  ,""
+	
+	Call logaction("Running db.search " & searchstring)
+	Set dc = xldb.Search(searchstring,Nothing,0)
+	Call logaction("db.search completed, found " & Cstr(dc.Count))
+	
+	If(dc.Count = 0) Then
+		NEMProgressEnd hwnd
+		
+		Messagebox "No documents exist for the dates requested",16,xlerrorstub & xlerrortext 
+		Call logaction("Exiting, No documents exist for the dates requested " & yearstart & "  to "  &  yearend)
+		Call logclose("Ends")
+		Exit Sub
+	End If
+	
+	NEMProgressSetBarPos hwnd, 90
+	NEMProgressSetText hwnd, Time$ & " " & Cstr(dc.count) & " Documents found for Inquiry " & blurb  ,""
+	
+	Set inqdoc = dc.GetFirstDocument
+	While Not inqdoc Is Nothing
+		
+' COUNT SIZEBANDS RETURNED SO JUST AN ARRAY COUNTING EACH SIZEBAND MATCHING THE ARRAY OF SIZEBANDS
+		
+		empsizeband = Right(inqdoc.empsizeband(0), (Len(inqdoc.empsizeband(0)) -2)) ' GET RID OF THE LEADING NUMBER AND DOT
+		
+		If(empsizeband = "0-0") Then    ' ANNOYING STUFF
+			empsizeband = "0"
+		End If
+		
+		If(empsizeband = "10000-9999999") Then    ' MORE ANNOYING STUFF
+			empsizeband = "10000"
+		End If
+		
+%REM
+empsizebandarray contains
+1.0
+2.1-9
+3.10-49
+4.50-99
+5.100-299
+6.300-499
+7.500-9999
+8.10000
+%END REM
+		
+' CODE CHANGED TO BE SLIGHTLY DIFFERENT AS THE KEYWORDS DEFINING THE EMP SIZEBANDS DO NOT EXACTLY MATCH 
+' WHAT IS CALCULATED IN THE CODE - DJS 24/04/2013		
+		For h = Lbound(empsizebandarray) To Ubound(empsizebandarray) 
+			If Instr(empsizebandarray(h),empsizeband) <> 0 Then
+				empsizebandarraycount(h+1) = empsizebandarraycount(h+1) + 1    ' STUPID BASE 1 THING
+				Exit For
+			End If
+		Next
+		Set inqdoc = dc.GetnextDocument(inqdoc)
+	Wend
+	
+'Destroy the progress bar when we're done
+	NEMProgressEnd hwnd
+	Call logaction("Charting the data")
+	Call logclose("Ends")
+	
+'HORRIBLE FIDDLING HERE DUE TO THE STUPIDITY OF HOW SIZEBANDS WORK AND EXCEL TRIMMING ZEROS 
+	Redim sizeband(Ubound(empsizebandarray)+1)
+	For f = Lbound(empsizebandarray) To Ubound(empsizebandarray) 
+		If(empsizebandarray(f) = "1.0") Then
+			sizeband(f+1) = "1. Zero"
+		Else
+			If(empsizebandarray(f) = "8.10000") Then
+				sizeband(f+1) = "8. 10000+"
+			Else
+				sizeband(f+1) = 	Left(empsizebandarray(f),2) & " " & Right(empsizebandarray(f), (Len(empsizebandarray(f)) -2))
+			End If
+		End If
+	Next
+	
+	' WRITE BACK TO THE DOC
+'	doc.workflowstatuses = empsizebandarray    ' THIS RESULTED IN THE RE-DRAW ACTION MISSING OFF THE ZERO ETC
+	doc.workflowstatuses = sizeband
+	doc.workflowstatuscount  = empsizebandarraycount
+	doc.datagathered = Now
+	
+	Call chart_enforce(sizeband,empsizebandarraycount,doc )
+	
+	Exit Sub
+errhandle:
+' LOG ERRORS
+	NEMProgressEnd hwnd
+	Call logerror(Err, Error, Erl, Lsi_info(2), Lsi_info(12),  "Error handler called") 
+	Exit Sub
+End Sub
+Function Compile() As String
+'	On Error Goto destroyhandle
+	Dim ws As New NotesUIWorkspace
+	Dim s As New NotesSession
+	Dim view As NotesView
+	Dim db As NotesDatabase
+	Dim uidoc As NotesUIDocument
+	Dim doc As NotesDocument
+	Dim getdoc As NotesDocument
+	Dim nextdoc As NotesDocument
+	Dim item As NotesItem
+	Dim insideitem As NotesItem
+	Dim secitem As NotesItem
+	Dim collection As NotesDocumentCollection     
+	Dim countchoices As String
+	Dim questiontext As String
+	Dim chartby() As String
+	Dim chartsec() As String
+	Dim chartarr As Integer
+	Dim chartbyunique() As String
+	Dim chartsecunique() As String
+	Dim chartuniquearr As Integer
+	Dim chartsecuniquearr As Integer
+	Dim totalarr() As String
+	Dim Reply As String
+	Dim secondary As String
+	Dim a As Integer
+	Dim b As Integer
+	Dim DR As Integer
+	Dim flag As Integer
+	Dim t As Integer
+	Dim num As Integer
+	Dim c As Integer
+	Dim w As Integer
+	Dim z As Integer
+	Dim xyz As Long
+	
+	compile = ""
+	
+	Set db = s.CurrentDatabase
+	Set uidoc = ws.CurrentDocument
+	uidoc.refresh
+	Set doc=uidoc.Document     
+	uidoc.FieldsetText "NumDocs",""
+	uidoc.FieldsetText "Totals",""
+	uidoc.FieldSetText "DateRange",""
+	
+	Dim DateTime As New NotesDateTime("")
+	
+	Set collection = db.Search("Form = ""PC"" ",DateTime,0)
+	
+	
+	If collection.count = 0 Then
+		Messagebox "No documents matched your search condition",64,"Excel Chart"
+		compile = "Fail"
+		Exit Function
+	End If
+	
+	'Now we've got the doc collection we'll be charting, do the counts
+	Set getdoc = collection.GetFirstDocument     
+	Set nextdoc = collection.GetFirstDocument          
+	
+'Create the progress bar
+'	hwnd = NEMProgressBegin(NPB_TWOLINE)
+'Set the bar range - the default is 100
+'	NEMProgressSetBarRange hwnd, 100
+	
+	chartarr = 1 'the total number of docs being included in the charting 
+	chartuniquearr = 1 'the nubmer of unique question answer values to be charted
+	chartsecuniquearr = 1 'the number of unique secondary variable values
+	Redim Preserve chartbyunique(chartuniquearr)
+	chartbyunique(chartuniquearr) = ""
+	Redim Preserve chartsecunique(chartsecuniquearr)
+	chartsecunique(chartsecuniquearr) = ""
+	
+	Set item = doc.GetFirstItem( "qtext" )
+	'this will be any secondary variables ("sex", "site", "payband" etc)
+	secondary = doc.secondary(0)
+	
+	Do Until(nextdoc Is Nothing)
+		
+		w%=w%+1
+		'Update the bar position
+		xyz = Clng(w%/collection.Count*100)
+'		NEMProgressSetBarPos hwnd, xyz
+'		NEMProgressSetText hwnd, Time$ & " Gathering data on " & item.Values(0) , Cstr(w) & " of " & collection.count
+		
+		Forall v In item.values 'will be only one! ie the question we're charting
+			If nextdoc.HasItem(v) Then 'all docs will have every field so always routed here!!
+				
+				Set insideitem = nextdoc.GetFirstItem(v)
+				Set secitem = nextdoc.GetFirstItem(secondary)
+				
+				Forall i In insideitem.Values 'only 1 val if radiobutton but could be more if checkbox
+					
+					If Cstr(i) <>"" Then
+						
+						'write doc values to the array lists (question answers and secondary vals)
+						Redim Preserve chartby(chartarr)
+						Redim Preserve chartsec(chartarr)
+						chartby(chartarr) = Cstr(i)
+						If secondary <> "None" Then
+							chartsec(chartarr) = secitem.values(0)
+						Else
+							chartsec(chartarr) = ""
+						End If
+						chartarr = chartarr + 1
+						If chartarr Mod 100 = 0 Then
+							'print "Number of elements processed = " & Cstr(chartarr) & "  of  " & Cstr(collection.count) & " (" & Format$(Cstr(chartarr/collection.count*100),".00")  & "%)   :  " & Time$
+						End If
+						
+						'check if this question answer has been logged before, or is it a new unique value
+						flag% = 0
+						For t% = 1 To Ubound(chartbyunique)
+							If(chartbyunique(t%) = Cstr(i)) Then
+								flag% = 1
+							End If
+						Next
+						If(flag% = 0) Then 'its a new unique question answer - add it to the list
+							Redim Preserve chartbyunique(chartuniquearr)
+' Get hold of the value of the variable we want here
+							chartbyunique(chartuniquearr) = Cstr(i)
+							chartuniquearr = chartuniquearr + 1
+						End If
+						
+						'same with any secondary variable values
+						
+						If secondary <> "None" Then
+							flag% = 0
+							For t% = 1 To Ubound(chartsecunique)
+								If(chartsecunique(t%) = Cstr(secitem.values(0))) Then
+									flag% = 1
+								End If
+							Next
+							If(flag% = 0) Then 'its a new unique secondary value - add it to the list
+								Redim Preserve chartsecunique(chartsecuniquearr)
+								chartsecunique(chartsecuniquearr) = secitem.values(0)
+								chartsecuniquearr = chartsecuniquearr + 1
+							End If
+						Else
+							chartsecunique(1) = "Totals"
+						End If
+						
+					End If
+					
+				End Forall
+				
+			End If               
+			
+		End Forall
+		Set nextdoc = collection.GetNextDocument(getdoc)
+		Set getdoc= nextdoc          
+		
+	Loop
+	
+destroyhandle:
+	'Destroy the progress bar when we're done
+'	NEMProgressEnd hwnd
+	
+	'SORT THE QUESTIONS
+	Call QuickSort(chartbyunique)                        
+	doc.chartbyunique = SortedArray 'for the form
+	'for the rest of this function re-assign the SortedArray values to the chartbyunique array
+	For t% = 1 To Ubound(SortedArray)
+		chartbyunique(t%) = sortedarray(t%)
+	Next
+	
+	Call uidoc.Save
+	Call uidoc.Reload
+	Call uidoc.RefreshHideFOrmulas
+	
+	'********************************************************************************************
+	'Messagebox Cstr(collection.count) & " documents matched your search condition"+Chr(10)+Cstr(Ubound(chartby)) & " documents are included in the chart counts",64,"Excel Chart"	
+	
+	'print "Finding totals " & Time$	
+	
+	Dim x As Integer
+	Dim Totals() As String
+	x=0      
+	num = 0
+	
+	If Right(secondary,4) <> "Date" Then
+		
+		'loop round secondary values (eg 'London', 'Newport')
+		For c% = Lbound(chartsecunique) To Ubound(chartsecunique)
+			
+			num = num + 1
+			Redim Preserve Totals(num)
+			Totals(num) = chartsecunique(c%)
+			
+			'loop round question values (eg '1. Yes', '2. No', '3. Maybe')
+			For b%=Lbound(chartbyunique) To Ubound(chartbyunique)
+				
+				For a%=Lbound(chartby) To Ubound(chartby)
+					If secondary = "None" Then
+						If(chartby(a%) = chartbyunique(b%)) Then
+							x=x+1
+						End If
+					Else
+						If(chartby(a%) = chartbyunique(b%) And chartsec(a%) = chartsecunique(c%)) Then
+							x=x+1
+						End If
+					End If
+				Next
+				
+				num = num + 1
+				Redim Preserve Totals(num)
+				Totals(num) = Cstr(x)
+				x=0
+				
+			Next
+			
+		Next
+		
+	End If
+	
+	doc.LastGenerated = Now
+	doc.Totals=totals
+'	doc.DateRange=DateRange
+	doc.NumDocs=Collection.Count
+	
+	Call doc.save(True,True)
+	Call uidoc.Reload
+	Call uidoc.refresh
+	Call uidoc.RefreshHideFormulas
+	
+End Function
+Sub statuscount(doc As NotesDocument)
+' NOTE THAT THE OPTION BASE 1 IS ON, ALTHOUGH THIS IS GENERALLY VERY ANNOYING, EXCEL WORKS ON THIS BASE
+' AND OVERALL IT IS EASIER TO GO ALONG WITH IT    DJS	MAY 2012
+	On Error Goto errhandle
+	Dim ws As New NotesUIWorkspace
+	Dim sess As New NotesSession
+	Dim db As NotesDatabase
+	Dim dc As NotesDocumentCollection
+	Dim inqdoc As NotesDocument
+	Dim searchstring As String
+	Dim chartinquiry As String
+	Dim chartyear As String
+	Dim yearstart As String
+	Dim yearend As String
+	Dim yearstartyyyymmdd As String
+	Dim yearendyyyymmdd As String
+	Dim dateholdvaryyyymmdd As String
+	Dim inqcode As String
+	Dim period As String
+	Dim mm As String
+	Dim qtr As String
+	Dim qtrstart As String
+	Dim qtrend As String
+	Dim lastday As String
+	Dim blurb As String
+	Dim datehold As String
+	Dim workflowstatuses(9) As String
+	Dim workflowstatusdatefields(9) As String
+	Dim  workflowstatuscount(9) As Integer
+	Dim idx As Integer
+	Dim i As Integer
+	Dim statushistory As Variant
+	Dim statushistorydates As Variant
+	Dim retval As Variant
+	Dim dateholdvar As Variant
+	Dim xyz As Long
+	
+	xlerrortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12))
+	Call initlog("Excel Chart All Actions For a Period") ' SET UP LOGGING WITH A REFERENCE/NAME
+	
+	Print Time$ & " " & xlerrorstub & xlerrortext
+	
+'Create the progress bar
+	hwnd = NEMProgressBegin(NPB_TWOLINE)
+'Set the bar range - the default is 100
+	NEMProgressSetBarRange hwnd, 100
+	NEMProgressSetBarPos hwnd, 10
+	
+' These are the statuses that we care about in the Excel report in question
+	
+	Call logaction("Building the workflow status array")
+	
+	workflowstatuses(1) = "New"
+	workflowstatuses(2) = "Awaiting Approval"
+	workflowstatuses(3) = "Approved"
+	workflowstatuses(4) = "Questionnaire Issued"
+	workflowstatuses(5) = "Warning Letter Issued"
+	workflowstatuses(6) = "Final Warning Letter Issued"
+	workflowstatuses(7) = "Instruction To Solicitor Issued"
+	workflowstatuses(8) = "Awaiting Court Action"
+	workflowstatuses(9) = "Complete/Closed"
+	
+	workflowstatusdatefields(1) = "date"
+	workflowstatusdatefields(2) = "submitted_date"
+	workflowstatusdatefields(3) = "startdate"
+	workflowstatusdatefields(4) = "questionnaire_date"
+	workflowstatusdatefields(5) = "warning_date"
+	workflowstatusdatefields(6) = "final_date"
+	workflowstatusdatefields(7) = "instruction_to_solicitor_date"
+	workflowstatusdatefields(8) = "Hearing_date"
+	workflowstatusdatefields(9) = "signoffdate"
+	
+	Call logaction("Detect inquiry parameters")
+	
+	If (doc.chartinquiry(0) <> "") Then
+		chartinquiry = doc.chartinquiry(0)
+		If(Mid$(chartinquiry,4,1) = ".") Then
+			inqcode = Left$(chartinquiry,5)
+		Else
+			inqcode = Left$(chartinquiry,3)
+		End If
+	End If
+	
+	chartyear = doc.chartyear(0)
+	
+	Call logaction("Taking the input year " & chartyear & " optional month " & doc.chartmonth(0)  & " and reformatting")
+	
+' THE DEFAULT ASSUMING ONLY YEAR IS CHOSEN
+	yearstart = "01/01/" & chartyear
+	yearend = "31/12/" & chartyear
+	
+	If(doc.chartmonth(0) <> "") Then   ' IF PUNTER WANTS MONTH
+		mm = doc.chartmonth(0)
+		Select Case mm                        '  SIGH, I JUST CAN'T BELIEVE I'M DOING THIS, CAN'T BE BOTHERED TO THINK OF A BETTER WAY
+		Case "01" : lastday = "31"
+		Case "02" : lastday = "28"           ' I CAN LIVE WITH MISSING LEAP DAYS
+		Case "03" : lastday = "31"
+		Case "04" : lastday = "30"
+		Case "05" : lastday = "31"
+		Case "06" : lastday = "30"
+		Case "07" : lastday = "31"
+		Case "08" : lastday = "31"
+		Case "09" : lastday = "30"
+		Case "10" : lastday = "31"
+		Case "11" : lastday = "30"
+		Case "12" : lastday = "31"
+		End Select
+
+%REM		
+		Select Case mm                        
+		Case "01", "03",  "05", "07", "08","10","12"  : lastday = "31"
+		Case "04","06","09", "11" : lastday = "30"
+		Case Else : lastday = "28"         
+		End Select
+		
+		if lastday = 28 and chartyear mod 4 = 0 then
+			lastday = 29   ' Simplistic Leap Year Test
+		end if 
+%END REM		
+	
+		yearstart = "01/" & mm & "/" & chartyear                    ' OBVIOUSLY YEARSTART AND YEAREND ARE MISNOMERS HERE BUT GOT BOLTED ON LATER
+		yearend = lastday &"/" & mm & "/" & chartyear
+	Else
+		If(doc.chartquarter(0) <> "") Then      ' IF PUNTER WANTS QUARTER
+			qtr = doc.chartquarter(0)
+			Select Case qtr                        '  SIGH, I JUST CAN'T BELIEVE I'M DOING THIS, CAN'T BE BOTHERED TO THINK OF A BETTER WAY
+			Case "1" : lastday = "31"
+				qtrend = "03"
+				qtrstart = "01"
+			Case "2" : lastday = "30"
+				qtrend = "06"
+				qtrstart = "04"
+			Case "3" : lastday = "30"
+				qtrend = "09"
+				qtrstart = "07"
+			Case "4" : lastday = "31"
+				qtrend = "12"
+				qtrstart = "10"
+			End Select
+			yearstart = "01/" & qtrstart & "/" & chartyear                    ' OBVIOUSLY YEARSTART AND YEAREND ARE MISNOMERS HERE BUT GOT BOLTED ON LATER
+			yearend = lastday &"/" & qtrend & "/" & chartyear
+		End If
+	End If
+	
+	Call logaction("The reformatted dates requested are " & yearstart & "  to "  &  yearend)
+	
+	' date is the created date of the form
+' inquiry_code is the 3 digit inquiry_code on the form
+' HAVE TO USE THE COMPUTED PERIODDATE AS THE STATS ARE BASED ON PERIOD NOT CREATED DATE	DJS 04/04/2012
+' PERIODDATE IS COMPUTED ON THE ENFORCEMENT FORM TO BE THE 15th DAY OF THE PERIOD ENFORCED FOR E.G. 201211 BECOMES 15/11/2012 
+' PERIODDATE IS NOT RELEVANT TO THE NEW METHOD WHICH NEEDS TO OR ALL THE DATE FIELDS IN THE workflowstatusdatefields ARRAY
+	
+	Call logaction("Building the searchstring")
+	
+	searchstring = |Form="enforcement" & |
+	
+	For i = 1 To 9
+		searchstring = searchstring & " (" & workflowstatusdatefields(i) & | >= @texttotime("| & yearstart & |") & | & workflowstatusdatefields(i) & | =< @texttotime("| & yearend & |")) | & " | "
+	Next
+	
+	searchstring = Left(searchstring,(Len(searchstring) -2))  ' Remove the final OR
+	
+	If (doc.chartinquiry(0) <> "") Then
+		searchstring = searchstring & | & inquiry_code = "| & inqcode & |"|
+	End If
+	
+	' WRITE BACK TO THE DOC
+	doc.searchstring = searchstring
+	doc.ExcelReport = "statuscount"
+	doc.Actionpressed = "Chart All Actions Over a Period"
+	
+	Print Time$ & " Collecting the data " & searchstring & " " & xlerrorstub & xlerrortext
+	
+	NEMProgressSetBarPos hwnd, 20
+	
+	If(doc.chartquarter(0) <> "") Then
+		blurb = inqcode & " For Year " & chartyear & " Quarter " & qtr
+	Else
+		blurb = inqcode & " For Period " & chartyear & doc.chartmonth(0)
+	End If
+	
+	NEMProgressSetText hwnd, Time$ & " Gathering data on Inquiry " & blurb  ,""
+	Call logaction("Running db.search " & searchstring)
+	Set dc = xldb.Search(searchstring,Nothing,0)
+	Call logaction("db.search completed, found " & Cstr(dc.Count))
+	
+	If(dc.Count = 0) Then
+		NEMProgressEnd hwnd
+'		Messagebox "No documents exist for " & searchstring,16,xlerrorstub & xlerrortext
+		Messagebox "No documents exist for the dates requested" ,16,xlerrorstub & xlerrortext 
+		Call logaction("Exiting, No documents exist for the dates requested " & yearstart & "  to "  &  yearend)
+		Call logclose("Ends")
+		Exit Sub
+	End If
+	
+	NEMProgressSetBarPos hwnd, 90
+	NEMProgressSetText hwnd, Time$ & " " & Cstr(dc.count) & " Documents found for Inquiry " & blurb  ,""
+	
+	yearstartyyyymmdd = Format(yearstart,"YYYYMMDD")    ' LETS BE REALLY LONG WINDED AND EXPLICIT HERE
+	yearendyyyymmdd = Format(yearend,"YYYYMMDD")     ' TO SAVE A PILE OF CONFUSION LATER
+	
+	Set inqdoc = dc.GetFirstDocument
+	While Not inqdoc Is Nothing
+		statushistory = inqdoc.statushistory
+		statushistorydates = inqdoc.statushistorydates
+		
+		For idx = 1 To 9                                   ' Work through the status dates
+			dateholdvar = inqdoc.GetItemValue(workflowstatusdatefields(idx))
+			dateholdvaryyyymmdd = Format(dateholdvar(0),"YYYYMMDD")
+			Stop
+			If(dateholdvaryyyymmdd >= yearstartyyyymmdd And dateholdvaryyyymmdd =< yearendyyyymmdd) Then
+				workflowstatuscount(idx) = workflowstatuscount(idx) + 1
+			End If
+		Next
+		
+		Set inqdoc = dc.GetnextDocument(inqdoc)
+	Wend
+	
+	doc.workflowstatuses = workflowstatuses
+	doc.workflowstatuscount = workflowstatuscount
+	doc.datagathered = Now
+	
+'Destroy the progress bar when we're done
+	NEMProgressEnd hwnd
+	Call logaction("Charting the data")
+	Call logclose("Ends")
+	Call chart_enforce(workflowstatuses,workflowstatuscount,doc )
+	
+	Exit Sub
+errhandle:
+' LOG ERRORS
+	NEMProgressEnd hwnd
+	Call logerror(Err, Error, Erl, Lsi_info(2), Lsi_info(12),  "Error handler called") 
+	Exit Sub
+End Sub
