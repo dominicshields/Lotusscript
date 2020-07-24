@@ -1,0 +1,3304 @@
+Option Public
+Option Declare
+Use "tasks"  
+Use "SignOffCase"
+
+'*****************************************************************************************
+
+' Amendments
+'
+' Nov 2002
+'
+' amended to print letterhead logos instead of using pre-printed stationary
+' signature now printed from BMP files as are logos
+' letterhead only printed if useletterhead flag on letter = y
+'
+' Amended also to use signatory name instead of doc id for lookup  
+'
+'********************************************************************************************
+
+Dim ws As notesuiworkspace
+Dim session As notessession
+
+Dim db As notesdatabase
+Dim dc As notesdocumentcollection
+
+Dim view As notesview
+Dim sigvw As notesview
+Dim logovw As notesview
+Dim foldview As notesview
+Dim delview As notesview
+
+Dim seldoc As notesdocument
+Dim ldoc As notesdocument
+Dim idoc As notesdocument
+Dim cdoc As notesdocument
+Dim courtdoc As notesdocument
+Dim prdoc As notesdocument
+Dim printerdoc As notesdocument
+Dim newdoc As notesdocument
+Dim sigdoc As notesdocument    
+Dim folddoc As notesdocument
+
+Dim uidoc As notesuidocument
+
+Dim ni As NotesItem
+Dim rti As Variant
+
+Dim emb  As notesembeddedobject
+
+' letter parameters
+
+Dim letterlist() As String
+Dim signatory As String
+Dim letterdate As Variant
+Dim expirydate As Variant
+Dim runopt As String
+Dim sigstr As String
+Dim nocopies As Integer
+Dim noncase As String
+Dim scottish As String
+Dim sicyear As String
+
+' error code
+
+Dim status As Integer
+
+' list of case + letter document ids
+
+Dim ids() As String 
+
+' document counters
+
+Dim docidno As Integer
+Dim numdocs As Integer
+
+' contrbutor contact & address (arrays)
+
+Dim contact As Variant
+Dim caddress  As Variant
+Dim foraddress As Variant
+Dim for2address As Variant
+Dim for2start As Integer
+
+' general text handling 
+
+Dim ltext As String
+Dim mtext As String
+Dim ptext As String
+Dim sbtext As String
+Dim endcom As Integer
+
+' Print parameters 
+
+Dim filenum As Integer
+Dim fname As String
+Dim printer As String
+Dim testprint As String
+Dim dtype As String
+
+Dim orient As String
+Dim twidth As Integer
+Dim lmargin As Double
+Dim tmargin As Double
+Dim pointsize As Integer
+Dim tray As String
+Dim trayint As String  ' String deliberately - its just a naming convention DJS 25/02/2014
+Dim paper As String
+Dim duplex As String
+
+Dim xcoord As Long        ' current xcoord for printing
+Dim ycoord As Long        ' current y coord
+Dim scoord As Long   
+Dim yinc As Long             ' amount to increment ycoord after each line
+Dim lineno As Integer       ' current line numer
+Dim maxlineno As Integer ' maximum line number allowed
+Dim startx As Long           ' start xcoord for page
+Dim starty As Long           ' start ycoord for page
+Dim pageno As Integer     ' current page number
+
+' formatting bold etc
+
+Dim fmt() As String
+Dim fmtpos() As Integer
+Dim ulon() As Integer
+
+Dim boldon As Integer
+Dim italicon As Integer
+Dim underlineon As Integer
+Dim underlinewason As Integer
+
+' formatting inquiry period details
+
+Dim inqperiod As String
+Dim imonth As String
+
+' formatting dates
+
+Dim indate As Variant
+Dim formatdate As String
+
+' justifing text
+
+Dim factor As Double
+Dim maxfactor As Double
+Dim nspace As Integer
+
+' general array for view search by key
+
+Dim ka() As String
+Dim inquiry_code As String
+Dim period As String
+
+
+'  variables for checking that the letter chosen is appropriate for the stage reached by  the case(s)
+
+Dim checkstage As Integer
+Dim ltype As Integer
+Dim ltypetext As String
+
+Dim errorstub As String
+Dim errortext As String
+
+Sub Initialize
+	Set session = New NotesSession
+	Set db = session.CurrentDatabase
+	errorstub = db.Title & ". Script Library: letters. Sub/function "	
+End Sub
+Sub printletters()
+	
+     '******************************************************************************************
+     '
+     ' printletters
+     '
+     ' print letters for all doc whose uids are in ids()
+     '
+     '******************************************************************************************
+	Dim i As Integer
+	
+	status = 0
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 	
+     ' lookup printer details
+	
+	Call getprinter()
+	If status <> 0 Then Exit Sub
+	
+     ' open output file & initialise printer
+	
+	Call openprint()
+	If status <> 0 Then Exit Sub
+	
+     ' loop through all printletter documents
+	
+	numdocs = Ubound(ids)
+	For docidno = 0 To numdocs
+		
+          ' get next document
+		
+		Call getnextdoc()
+		If status <> 0 Then 
+			Close #filenum               
+			Exit Sub
+		End If
+		
+          'print letter
+		
+		For i% = 1 To nocopies
+			Call printcurdoc() 
+			If status <> 0 Then 
+				Close #filenum               
+				Exit Sub
+			End If
+		Next
+	Next
+	
+     ' send file to printer
+	
+	Close #filenum
+	Filecopy fname, printer
+	
+End Sub
+Sub createnoncase
+	
+     '******************************************************************************************
+	
+    ' main entry point
+	
+     ' create non case letter from non case template
+	
+     '******************************************************************************************
+	
+	Set ws = New notesuiworkspace
+	Set session = New  notessession
+	Set db = session.currentdatabase
+	
+	status = 0
+	runopt = "seldoc"
+	dtype = "doc"
+	noncase = "y"
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	
+	' set view for logo docs
+	
+	Set logovw = db.getview("logos")
+	If logovw Is Nothing Then
+		Messagebox "Error: View: logos not found",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+	' set view for signature docs
+	
+	Set sigvw = db.getview("staff")
+	If sigvw Is Nothing Then
+		Messagebox "Error: View: staff not found",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+      ' set letter parameters 
+	
+	Call getletter()
+	If status <> 0 Then Exit Sub
+	
+      ' set up letter document & fields
+	
+	Set newdoc = db.createdocument
+	
+	Call ldoc.copyallitems(newdoc, True)
+	newdoc.form = "noncaseletter"
+	newdoc.dated = letterdate
+	newdoc.signatory = signatory
+'	newdoc.signatoryid = signatoryid
+	
+     ' replace field keywords
+	
+	Call replacefields()
+	If status <> 0 Then Exit Sub
+	
+	Set uidoc = ws.editdocument(True, newdoc)
+	
+End Sub
+Sub getprinter
+	
+	'************************************************************************
+	
+	' lookup letter printer details
+	
+	'***********************************************************************
+	status = 0
+	' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 	
+	
+	Set view = db.getview("printers")
+	If view Is Nothing Then
+		Beep
+		Msgbox "Error: Unable to access view 'printers'", 16, errorstub & errortext
+		status = 1
+		Exit Sub
+	End If
+	
+	Set printerdoc = view.getfirstdocument
+	If printerdoc Is Nothing Then 
+		Beep
+		Msgbox "Error: Unable to access printers document", 16, errorstub & errortext
+		status = 1
+		Exit Sub
+	End If
+	
+	printer = printerdoc.letterprinter(0)
+	
+	tray = Lcase(printerdoc.lettertraynum(0))
+	trayint = printerdoc.lettertrayint(0)        ' Newly calculated on the printer config doc DJS 25/02/2014
+	paper = Lcase(printerdoc.letterpaper(0))
+	
+End Sub
+Sub printletterdoc
+	
+     '******************************************************************************
+     ' 
+     ' Main Entry Point
+     '
+     ' print currently open  document
+    ' 
+     '*****************************************************************************
+	
+	Set ws = New notesuiworkspace
+	Set session = New  notessession
+	Set db = session.currentdatabase
+	
+	status = 0
+	runopt = "seldoc"
+	dtype = "doc"
+	nocopies = 1
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 	
+     ' get id of current document
+	
+	Set uidoc = ws.currentdocument
+	If uidoc Is Nothing Then
+		Beep
+		status = 1
+		Msgbox "Error: Unable to access current UI document",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+	Set seldoc = uidoc.document
+	If seldoc Is Nothing Then
+		Beep
+		status = 1
+		Msgbox "Error: Unable to access current document",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+     ' print
+	
+	Redim ids(0)
+	
+	Call printletters()
+	If status <> 0 Then Exit Sub
+	
+	Msgbox "Letter printed successfully", 64, " Information"
+	
+End Sub
+Sub getprofiledoc
+	
+     '********************************************************************
+	
+     ' get profile docuement & disable deselect agent
+	
+     '********************************************************************
+	
+	status = 0
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 	
+	
+	Set prdoc = db.getprofiledocument("dbprofile")
+	If prdoc Is Nothing Then
+		Beep
+		status = 1
+		Msgbox "Error: Unable to access dbprofile document", 16, errorstub & errortext
+		Exit Sub
+	End If
+	
+	prdoc.deselect = "n"
+	
+End Sub
+
+Sub letterhead()
+	
+	' *******************************************************************
+	
+	
+	' print letterheading
+	
+	
+	'********************************************************************
+	
+	Dim px As Long 
+	Dim py As Long
+	Dim ly As Long
+	Dim iheight As Long
+	Dim afont As String
+	Dim add1 As String			'  ons address details for letterhead
+	Dim add2 As String
+	Dim add3 As String
+	
+	' select new or old letter heading
+	' depending on date letter created
+	
+%REM	    OBSOLETE CODE - CHECKING FOR BEFORE NOV 2002  DJS 09/06/2016 - requirement To change ONS URL so hold In dbprofile
+	
+	If Fix(seldoc.created) < Cdat("21 November, 2002") Then
+		
+		' print ons logo
+		
+		ptext = ""
+		px = 0.35*600
+		py = 0.4*600
+		Call printbmp(px, py,"Old Logo", iheight)
+		Print #filenum, ptext
+		
+		' print ons details in centre of letterhead
+		
+		afont = Chr$(27) & "(s1p7.5v0s0bs16602T"		
+		add1 = "Office for National Statistics " & Chr$(249) & " Government Buildings " & Chr$(249) & " Cardiff Road" & Chr$(249) & "Newport " 
+		add2 =  "Gwent " & Chr$(249) & " NP10 8XG " & Chr$(249) & " Tel: 01633 815696" & Chr$(249) & " Fax: 01633 652747"
+		add3 =  "E-mail: info@ons.gov.uk " & Chr$(249) & " www.statistics.gov.uk"
+		
+		px = 3.8 * 600
+		py = ly + 0.7 * 600
+		ptext =  Chr$(27) & "*p" & px & "x" & py & "y" & Chr$(27) & afont & add1 & Chr$(13)
+		ptext = ptext & Chr$(27) & "*p" & px & "x" & py + 65 & "Y" &_
+		add2  & Chr$(13)
+		ptext = ptext & Chr$(27) & "*p" & px & "x" & py + 130 & "Y" &_
+		add3  & Chr$(13)
+		
+		Print #filenum,ptext
+		
+		' print a line underneath ons details
+		
+		ptext = Chr$(27) & "*p" & px & "x" & py + 150 & "Y" & Chr$(27) &  "*c2160A" & Chr$(27) & "*c5B" &_
+		Chr$(27) & "*c0P" 
+		Print #filenum, ptext
+		
+		' calculate new yccord and lineno if margin insufficient
+		
+		If tmargin < 1.2 Then
+			ycoord = (1.2 * 600) + yinc 
+			lineno = Fix((1.2 - tmargin) * 600/yinc) + 1  			
+		End If
+	
+	Else
+	%END REM
+	
+	'  print logos on letterhead
+	' crest first then ons logo
+	
+	ptext = ""
+	px = 0.75 * 600
+	py = 0.25 * 600
+	Call printbmp(px, py,"Crest", iheight)
+	Print #filenum, ptext
+	
+	' set crest font 
+	afont = Chr$(27) & "(s1p7.5v0s0bs169013T"
+	
+%REM		 DJS 16/02/2012 - WEASLEY STUFF
+ 		' print ons text underneath crest
+		ptext =  Chr$(27) & "*p" & px - 100 & "x" & Chr$(27) & afont & "Office for National Statistics" & Chr$(13)
+		ptext = ptext & Chr$(27) & "*p" & px & "x" & py + 620 & "Y" &_
+		"A Government Agency"  & Chr$(13)
+		Print #filenum, ptext
+	%END REM
+	
+	' print ons details in centre of letterhead
+	'  set address font
+	
+	Call getprofile()    ' DJS 09/06/2016 - requirement to change ONS URL so hold in dbprofile
+	
+	afont = Chr$(27) & "(s1p7.5v0s0bs16602T"
+	add1 = "Office for National Statistics " & Chr$(249) & " Government Buildings " & Chr$(249) & " Cardiff Road"
+	add2 = "Newport " & Chr$(249) & " Gwent " & Chr$(249) & " NP10 8XG "
+	'		add3 = "www.statistics.gov.uk"        '		DJS 09/06/2016 - requirement To change ONS URL so hold In dbprofile
+	add3 = prdoc.onswebsite(0)                         '		DJS 09/06/2016 - requirement To change ONS URL so hold In dbprofile
+
+	px = px + (1.375 * 600)
+	py = py + 400
+	ptext =  Chr$(27) & "*p" & px & "x" & py & "y" & Chr$(27) & afont & add1 & Chr$(13)
+	ptext = ptext & Chr$(27) & "*p" & (px + 450) & "x" & py + 75 & "Y" &_
+	add2  & Chr$(13)
+	ptext = ptext & Chr$(27) & "*p" & (px + 600) & "x" & py + 150 & "Y" &_
+	add3  & Chr$(13)
+	
+	Print #filenum,ptext
+	
+	' print a line underneath ons details
+	ptext = Chr$(27) & "*p" & px & "x" & py + 170 & "Y" & Chr$(27) &  "*c1874A" & Chr$(27) & "*c5B" &_
+	Chr$(27) & "*c0P" 
+	Print #filenum, ptext
+	
+	' adjust xcoord to print ons logo on right of document
+	
+	py = py - 200
+	px = px + ( 3.875 * 600)
+	ptext = ""
+	Call printbmp(px, py, "Logo", iheight)
+	Print #filenum, ptext
+	
+	' calculate new yccord and lineno if margin insufficient
+	
+	If tmargin < 1.25 Then
+		ycoord = (1.25 * 600) + yinc 
+		lineno = Fix((1.25 - tmargin) * 600/yinc) + 1  			
+	End If
+	
+	' END OF REMMED OUT IF DJS 09/06/2016 - requirement To change ONS URL so hold In dbprofile	End If
+	
+	
+	
+End Sub
+Sub printletterdocs
+	
+     '*************************************************************************************
+     '
+     ' Main Entry Point
+     '
+     ' Print list of letter documents currently selected in a view by user
+	
+     '*************************************************************************************
+	
+	Set ws = New notesuiworkspace
+	Set session = New  notessession
+	Set db = session.currentdatabase
+	Dim nlc As Integer
+	Dim i As Integer
+	
+	status = 0
+	runopt = "seldoc"
+	dtype = "list"
+	nocopies = 1
+	
+	' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	
+     ' get profile document to set flag for deselect agent
+	
+	Call getprofiledoc()
+	If status <> 0 Then Exit Sub
+	
+	' set view for logo docs
+	
+	Set logovw = db.getview("logos")
+	If logovw Is Nothing Then
+		Messagebox "Error: Logo docs view not found",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+	' set view for signature docs
+	
+	Set sigvw = db.getview("staff")
+	If sigvw Is Nothing Then
+		Messagebox "Error: View: staff not found",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+     ' get selected document ids into ids array
+	
+	Redim ids(0)
+	
+	Set dc = db.unprocesseddocuments
+	If dc.count = 0 Then
+		Beep
+		Msgbox "Error: A Letter document must be selected first", 16, errorstub & errortext
+		status = 1         
+		Exit Sub
+	End If
+	
+	nlc% = -1
+	For i% = 1 To dc.count
+		Set seldoc = dc.getnthdocument(i%)
+		If seldoc.form(0) = "printletter" _
+		Or seldoc.form(0) = "noncaseletter" Then
+			nlc% = nlc% + 1               
+			Redim Preserve ids(nlc%)
+			ids(nlc%) = seldoc.universalid
+		End If
+	Next
+	
+	If nlc% = -1 Then
+		Beep
+		Msgbox "Error: No Letter documents have been selected ", 16, errorstub & errortext
+		status = 1         
+		Exit Sub
+	End If
+	
+	If nlc% <> dc.count-1 Then
+		Beep
+		Msgbox "Warning: Some non-letter documents were selected and have been ignored", 48, errorstub & errortext
+	End If
+	
+     ' print 
+	
+	Call printletters()
+	If status <> 0 Then Exit Sub
+	
+     ' enable deselect agent
+	
+	prdoc.deselect = "y"
+	
+	Msgbox "Letter(s) printed successfully", 64, " Information"
+	
+End Sub
+Sub getnextdoc
+	
+     '*******************************************************************************************
+     '
+     ' retrieve document from ids list
+     '
+     ' element  to retrieve in docidno
+     '
+     '*******************************************************************************************
+	
+	status = 0
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+     ' if a single document or test then doc already in seldoc
+	
+	If dtype = "doc" Or testprint = "y" Then Exit Sub
+	
+     ' get document using approriate id
+	
+	Set seldoc = db.getdocumentbyunid(ids(docidno))
+	If seldoc Is Nothing Then
+		Beep
+		status = 1
+		Msgbox "Error: Unable to access document no: " & docidno & "  ID:" & ids(docidno), 16, errorstub & errortext 
+		Exit Sub
+	End If
+	
+End Sub
+Sub createletters
+     '******************************************************************************************
+    ' createletters
+     ' create letters for case detail documents
+     ' held in array ids
+     '******************************************************************************************
+	Dim profiledoc As NotesDocument
+	Dim sendto As Variant
+	Dim copyto As Variant
+	Dim recipient As String
+	Dim actionrequired As String
+	Dim i As Integer
+	Dim ignoresetdates As Integer
+	Dim subject As String
+	
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12))  
+	
+     ' loop through selected documents 
+	
+	numdocs = Ubound(ids)
+	For docidno = 0 To numdocs
+         ' get selected document
+		
+		Call getnextdoc()
+		If status <> 0 Then Exit Sub
+		
+         ' get company/inquiry details etc
+		
+		Call getdetails()
+		If status <> 0 Then Exit Sub
+		
+          ' set up letter document & fields
+		
+		Set newdoc = db.createdocument
+		
+		Call ldoc.copyallitems(newdoc, True)
+		
+		newdoc.form = "printletter"
+' POINTED OUT THAT THE CREATOR,  DATE AND TIME ARE BEING PICKED UP FROM THE TEMPLATE DJS 17/10/2012
+		Dim nncreator As New Notesname(session.UserName)    '  DJS 17/10/2012
+		newdoc.creator = nncreator.Abbreviated                                  '  DJS 17/10/2012
+		newdoc.date = Now                                                                      '  DJS 17/10/2012
+		newdoc.time = Now                                                                      '  DJS 17/10/2012
+		newdoc.reference = seldoc.reference(0)
+		newdoc.name = seldoc.name(0)          
+		newdoc.inquiry_code = seldoc.inquiry_code(0)
+		newdoc.period = seldoc.period(0)
+		newdoc.serial_no = seldoc.serial_no(0)
+		newdoc.dated = letterdate
+		newdoc.expiry = expirydate
+'		newdoc.signatoryid = signatoryid
+		newdoc.signatory = signatory
+' POTENTIALLY IF THIS BECOMES NECESSARY MAKE THE LETTER A RESPONSE TO THE ENFORCEMENT FORM
+' THE REASON IS THAT EVEN THOUGH I HAVE TWEAKED THE BY REFERENCE VIEW TO SORT THE LETTERS
+' CORRECTLY IF THERE ARE MULTIPLE CASES FOR THE SAME RU REFERENCE, THERE IS STILL A MARGINAL ISSUE
+' OF MULTIPLE CASES FOR THE SAME RUREF, INQUIRY, PERIOD . . . . .  .SIGH !		
+'		Call newdoc.MakeResponse(seldoc)		' DJS 14/05/2012
+		
+         ' replace field keywords
+		
+		Call replacefields()
+		If status <> 0 Then Exit Sub
+		
+		errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+		
+          ' save and update case
+		
+		If testprint <>"y" And ldoc.printonly(0) = "n" Then
+			
+			Call newdoc.save(True, False)
+			
+%REM			
+'**************************************************************************************************************************		
+lettertype field values
+Warning
+Final Warning
+Solicitor
+Witness Statements
+2nd Prosecution
+Other
+Non Case
+' HACK TO SET THE STATUS DJS 25/01/.2012
+%END REM	
+			ignoresetdates = 0                                                    '  DO NOT OVERWRITE DATES IF INCORRECT LETTER CHOSEN DJS 09/05/2012
+			Select Case seldoc.status(0)
+			Case "Questionnaire Issued" :  
+				If(ldoc.lettertype(0) = "Warning") Then                ' ALL THE LETTER TYPE/STATUS CROSS CHECKS ADDED 09/05/2012 DJS
+					seldoc.status = "Warning Letter Issued"
+					seldoc.WarningLetterIssuedby = session.UserName           ' V022 DJS 22/10/2015
+				Else
+					Messagebox "Only Warning Letters are valid at status " & seldoc.status(0) & ", you have selected a " & ldoc.lettertype(0) &_
+					" letter " & ldoc.lettername(0) & " which will be printed but the workflow will not be moved on.",48,errorstub & errortext
+					ignoresetdates = 1    ' TELL CODE TO IGNORE DATE SETTING DJS 09/05/2012
+				End If
+			Case "Warning Letter Issued" :  
+				If(ldoc.lettertype(0) = "Final Warning") Then
+					seldoc.status = "Final Warning Letter Issued"
+					seldoc.FinalWarningLetterIssuedby = session.UserName           ' V022 DJS 22/10/2015
+				Else
+					Messagebox "Only Final Warning Letters are valid at status " & seldoc.status(0) & ", you have selected a " & ldoc.lettertype(0) &_
+					" letter " & ldoc.lettername(0) & " which will be printed but the workflow will not be moved on.",48,errorstub & errortext
+					ignoresetdates = 1         ' TELL CODE TO IGNORE DATE SETTING DJS 09/05/2012
+				End If
+			Case "Final Warning Letter Issued" :  
+				If(ldoc.lettertype(0) = "Solicitor") Then
+					seldoc.status = "Instruction To Solicitor Issued"
+					seldoc.InstructionToSolicitorIssuedby = session.UserName           ' V022 DJS 22/10/2015
+                         ' NEW CODE IN SCRIPT LIBRARY SIGNOFFCASE				
+					Call solicitorletternotification(seldoc)      ' DJS 23/04/2012
+				Else
+					Messagebox "Only Solicitors Letters are valid at status " & seldoc.status(0) & ", you have selected a " & ldoc.lettertype(0) &_
+					" letter " & ldoc.lettername(0) & " which will be printed but the workflow will not be moved on.",48,errorstub & errortext
+					ignoresetdates = 1         ' TELL CODE TO IGNORE DATE SETTING DJS 09/05/2012
+				End If	
+			Case "Awaiting Court Action" :  
+				If(ldoc.lettertype(0) <> "2nd Prosecution") Then
+					Messagebox "Only 2nd Prosecution Letters are valid at status " & seldoc.status(0) & ", you have selected a " & ldoc.lettertype(0) &_
+					" letter " & ldoc.lettername(0) & " which will be printed but the workflow will not be moved on.",48,errorstub & errortext
+					ignoresetdates = 1         ' TELL CODE TO IGNORE DATE SETTING DJS 09/05/2012
+				End If	
+			Case "New", "Awaiting Approval", "Returned To Originator", "Approved", "Complete", "Closed"
+				Messagebox "At the current workflow status: " & seldoc.status(0) & ", it is not appropriate to issue a " & ldoc.lettertype(0) &_
+				" letter '" & ldoc.lettername(0) & "'. However it will be printed but this will not affect the workflow.",48,errorstub & errortext
+				ignoresetdates = 1         ' ADDED FOR COMPLETENESS 15/05/2012 DJS
+			End Select				
+			Call log_it( seldoc.status(0) ,seldoc,errorstub & errortext ) ' Too important to not nail down
+			
+ ' update dates on case details if required 
+			
+			If ldoc.setdatefield(0) <> "none" And ignoresetdates = 0 Then   ' TELL CODE TO IGNORE DATE SETTING DJS 09/05/2012
+' THESE VALUES on LDOC ARE HELD IN THE COMPUTED FIELDS ON THE LETTER FORM/DOCUMENT
+' IF THEY NEED TO CHANGE THEN REMEMBER TO REFRESH THE EXISTING DOCS  DJS 20/04/2012
+				Set ni = seldoc.replaceitemvalue(ldoc.setdatefield(0), letterdate)
+				Set ni = seldoc.replaceitemvalue(ldoc.setexpiryfield(0), expirydate)
+				seldoc.expiredaction = ""
+				seldoc.letterissued = "Yes"
+				Call seldoc.save(True, False)
+			End If
+			
+		End If
+		
+		If ldoc.printonly(0) = "y" Then
+			
+			Set seldoc = newdoc          
+			
+                ' lookup printer details
+			
+			Call getprinter()
+			If status <> 0 Then Exit Sub
+			
+               ' open output file & initialise printer
+			
+			Call openprint()
+			If status <> 0 Then Exit Sub
+			
+                'print letter
+			
+			For i% = 1 To nocopies
+				Call printcurdoc() 
+				If status <> 0 Then 
+					Close #filenum               
+					Exit Sub
+				End If
+			Next
+			
+              ' send file to printer
+			
+			Close #filenum
+			Filecopy fname, printer
+			
+		End If
+		
+         ' store id of letter document for printing later
+		
+		ids(docidno) = newdoc.universalid
+		
+	Next
+	
+     ' keep document for printing if a single document
+	
+	If dtype = "doc" Or testprint = "y" Then
+		Set seldoc = newdoc
+	End If
+	
+     ' print letters
+	
+	If (ldoc.autoprint(0) = "y" Or testprint = "y") And ldoc.printonly(0) = "n" Then
+		Call printletters()
+		If status <> 0 Then Exit Sub
+	End If
+	
+End Sub
+Sub getprofile
+ '********************************************************************
+' get profile document only, the other one sets a flag I do not want to interfere with   DJS 09/06/2016 - requirement to change ONS URL so hold in dbprofile
+ '********************************************************************
+
+	status = 0
+' Internal Notes constants that give information about the current module
+	errortext = LCase(LSI_Info(2)) & " called by " & LCase(LSI_Info(12))
+
+	Set prdoc = db.getprofiledocument("dbprofile")
+	If prdoc Is Nothing Then
+		Beep
+		status = 1
+		MsgBox "Error: Unable to access dbprofile document", 16, errorstub & errortext
+		Exit Sub
+	End If
+
+End Sub
+Sub createletterdoc
+	
+     '******************************************************************************
+     ' 
+     ' Main Entry Point
+     '
+     ' create letter for currently open case document
+    ' 
+     '*****************************************************************************
+	
+	Set ws = New notesuiworkspace
+	Set session = New  notessession
+	Set db = session.currentdatabase
+	
+	status = 0
+	runopt = "seldoc"
+	dtype = "doc"
+	noncase = "n"
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 		
+     ' get  current document
+	
+	Set uidoc = ws.currentdocument
+	If uidoc Is Nothing Then
+		Beep
+		status = 1
+		Msgbox "Error: Unable to access current UI document",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+	Set seldoc = uidoc.document
+	If seldoc Is Nothing Then
+		Beep
+		status = 1
+		Msgbox "Error: Unable to access current document",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+     ' set letter parameters 
+	
+	Call getletter()
+	If status <> 0 Then Exit Sub
+	
+     ' create letter & print
+	
+	Redim ids(0)
+	
+	Call createletters()
+	If status <> 0 Then Exit Sub
+	
+	Call ws.viewrefresh
+	
+	Msgbox "Letter created successfully", 64, " Information"
+	
+End Sub
+Sub jtext
+	
+     '**********************************************************************************************
+	
+     ' calculates number of spaces for padding centre and right justification
+     ' for text held in mtext
+	
+     '**********************************************************************************************
+	Dim y As Integer
+	status = 0
+	
+     ' remove format effectors in string
+	
+	ptext = mtext
+	
+	y% = Instr(ptext, "^")
+	Do While y% > 0
+		ptext = Left$(ptext, y%-1) & Mid$(ptext, y%+2)
+		y% = Instr(y% + 2, ptext, "^")
+	Loop
+	
+     ' set factor depending on number of capitals in text
+	
+  '   nlower% = Len(ptext)
+  '   For i% = 1 To Len(ptext)
+  '        nlower% = nlower% + (Asc(Mid$(ptext, i%, 1)) >= 64 And Asc(Mid$(ptext, i%, 1)) <=90)
+  '   Next
+	
+ '    factor = Log(1 + 9*nlower%/Len(ptext))/Log(10) * maxfactor
+ '    factor = nlower%/Len(ptext) * maxfactor
+	
+	factor = maxfactor
+	
+	nspace = ldoc.twidth(0) - Len(ptext)
+	If nspace <= 0 Then 
+		nspace = 1
+	Else
+		nspace = nspace + Int(nspace*factor)         
+	End If
+	
+	
+End Sub
+Sub pagenum()
+	
+     '******************************************************************************
+	
+     ' put page number at bottom left of page
+	
+     '******************************************************************************
+	
+	pageno = pageno + 1
+	ycoord = starty + (maxlineno+1) * yinc
+	
+	If seldoc.numberpages(0) = "y" Then
+		Print #filenum, Chr$(27) & "*p" & xcoord & "x" & ycoord & "Y" & pageno
+	End If
+	
+End Sub
+Sub replacepound(text As String)
+	Dim p As Integer	
+	p% = Instr(text,Chr$(144))
+	Do While p% > 0 
+         ' Mid$(text,p%,1) = Chr$(156)
+		Mid$(text,p%,1) = Chr$(163)
+		p% = Instr(text,Chr$(144))
+	Loop
+	
+	p% = Instr(text,Chr$(163))
+	Do   While p% > 0 
+		Mid$(text,p%,1) = Chr$(156)
+		
+		p% = Instr(text,Chr$(163))
+	Loop     
+End Sub
+Sub getletterhead
+	Dim oldlogodoc As NotesDocument
+	Dim logodoc As NotesDocument
+	Dim crestdoc As NotesDocument
+	' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	
+	Set sigvw = db.getview("staff")
+	If sigvw Is Nothing Then
+		Messagebox "Error: Signature docs view not found",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+	Set oldlogodoc = sigvw.getdocumentbykey("Old Logo", True)
+	If oldlogodoc Is Nothing Then
+		Messagebox "Error: Old ONS Logo document not found",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+	Set logodoc = sigvw.getdocumentbykey("Logo", True)
+	If logodoc Is Nothing Then
+		Messagebox "Error: ONS Logo document not found",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+	Set crestdoc = sigvw.getdocumentbykey("Crest", True)
+	If crestdoc Is Nothing Then
+		Messagebox "Error: Crest document not found",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+	
+End Sub
+Sub recordfmt
+	
+     '**********************************************************************************************
+     '
+     ' remove format effectors from letter text
+     ' and remember positions & format actions in arrays
+     '
+     '**********************************************************************************************
+	Dim numfmt As Integer
+	Dim p As Integer
+	
+	status = 0    
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 	
+     ' record format effectors
+	
+	Redim Preserve fmt(0)
+	Redim Preserve fmtpos(0)
+	Redim Preserve ulon(0)
+	
+	numfmt = -1
+	boldon = False
+	underlineon = False
+	italicon = False
+	
+	p% = Instr(ltext, "^")
+	Do While p% > 0
+		
+		numfmt = numfmt + 1
+		Redim Preserve fmt(numfmt)
+		Redim Preserve fmtpos(numfmt)
+		Redim Preserve ulon(numfmt)
+		
+		Select Case Mid$(ltext, p%+1, 1)
+			
+		Case "B"         
+			boldon = Not boldon
+			fmtpos(numfmt) = p%
+			If boldon Then
+				fmt(numfmt) = Chr$(27) & "(s3B"
+			Else
+				fmt(numfmt) = Chr$(27) & "(s0B"
+			End If
+			
+		Case "U"
+			underlineon = Not underlineon
+			fmtpos(numfmt) = p%
+			If underlineon Then
+				fmt(numfmt) = Chr$(27) & "&d0D"
+			Else
+				fmt(numfmt) = Chr$(27) & "&d@"
+			End If
+			
+		Case "I"
+			italicon = Not italicon
+			fmtpos(numfmt) = p%
+			If italicon Then
+				fmt(numfmt) = Chr$(27) & "(s1S"
+			Else
+				fmt(numfmt) = Chr$(27) & "(s0S"
+			End If
+			
+		Case Else
+			status = 1    
+			Beep               
+			Msgbox "Invalid format character at: " & Mid$(ltext, p%, 20), 16, errorstub & errortext
+			Exit Sub
+			
+		End Select
+		
+		ulon(numfmt) = underlineon
+		
+		ltext = Left$(ltext, p%-1) & Mid$(ltext, p%+2)
+		p% = Instr(ltext, "^")
+		
+	Loop
+	
+End Sub
+Sub createletterdocs()
+	
+     ' **********************************************************************************************
+     '
+     ' Main Entry Point
+     '
+     ' create letters for list of case documents selected by user
+     '
+     ' ids of valid, selected case documents are placed in an array
+	' to be processed by createletters subroutine
+	'
+     '***********************************************************************************************
+	Set ws = New notesuiworkspace
+	Set session = New  notessession
+	Set db = session.currentdatabase
+	
+	Dim mc2 As Integer
+	Dim nlc As Integer
+	Dim i As Integer
+	Dim scotchoice As Integer
+	Dim r As Integer
+	
+	dtype = "list"
+	status = 0
+	noncase = "n"
+	scotchoice = 0
+	
+	' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	
+     ' get profile document to set deselect agent flag
+	
+	Call getprofiledoc()
+	If status <> 0 Then 
+		Exit Sub
+	End If
+	
+	' set view for logo docs
+	
+	Set logovw = db.getview("logos")
+	If logovw Is Nothing Then
+		Messagebox "Error: View: logos not found",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+	' set view for signature docs
+	
+	Set sigvw = db.getview("staff")
+	If sigvw Is Nothing Then
+		Messagebox "Error: View: staff not found",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+     ' get 1st case document for parent view options
+	
+	Set dc = db.unprocesseddocuments
+	
+	If dc.count = 0 Then
+		Beep
+		Msgbox "Error: A case details document must be selected first", 16, errorstub & errortext
+		status = 1         
+		Exit Sub
+	End If
+	
+	'########################################################################
+	' put all selected docs in a folder
+     ' process the docs from this folder - unprocesseddocuments causes docs to be printed unsorted (by company name)
+	' the folder is removed after the docs are processed
+	' Romi 30/05/2003
+	
+	'This removes the folder if it already exists Gwyn 3/12/08
+	Set delview = db.getview("(hiddenfolder - selected inquiries)")
+	If delview Is Nothing Then
+		'do nothing
+	Else
+		Call delview.remove
+	End If
+	
+	Call dc.PutAllInFolder( "(hiddenfolder - selected inquiries)" )
+	
+	Set foldview = db.getview("(hiddenfolder - selected inquiries)")
+	
+	If foldview Is Nothing Then 
+		Msgbox "Unable to locate '(hiddenfolder - selected inquiries)' folder. Cannot loop through documents.",16,errorstub & errortext
+		Exit Sub
+	End If
+	
+	'	Set seldoc = dc.getfirstdocument     
+	Set seldoc = foldview.getfirstdocument
+	'########################################################################
+	
+     ' get letter parameters 
+	
+	Call getletter()
+	If status <> 0 Then Exit Sub
+	
+     ' get selected documents or documents for all inquiry
+	
+	Redim ids(0)
+	mc2% = 0
+	If runopt = "seldoc" Then      ' THE TEST PRINT OPTION WAS SELECTED IN THE PARAMETER FORM POPUP DJS 17/04/2012
+		
+          ' get selected case documents
+		
+		nlc% = -1
+		Set seldoc = foldview.getfirstdocument
+		Do Until seldoc Is Nothing
+			If seldoc.form(0) = "livecasedetails" Or seldoc.form(0) = "enforcement" Then   ' DJS 19/01/2012 added the OR
+				nlc% = nlc% + 1               
+				Redim Preserve ids(nlc%)
+				ids(nlc%) = seldoc.universalid
+				If testprint = "y" Then i% = dc.count +1
+			End If 
+%REM WAS ASKED TO REMOVE SCOTTISH TEST 30/04/2012 DJS . . . . . .SIGH!					
+' ADDED SCOTTISH TEST AFTER ISSUE BELATEDLY RAISED 05/04/2012 DJS			
+			If (seldoc.HasItem("scottish") And seldoc.scottish(0) <> ldoc.scottish(0)) Then
+' ALLOW THE USER TO CARRY ON EVEN IF SCOTTISH LETTER NOT CORRECT  12/04/2012 DJS 
+				scotchoice = Messagebox ("Warning: Invalid combination of Company and Scottish Letter type " & seldoc.reference(0) & " " & seldoc.Name(0) & ", do you want to continue printing?", 20, errorstub & errortext)
+				If(scotchoice = 7) Then      ' 6 = Yes  7 = No		
+					status = 1         
+					Exit Sub
+				End If
+			End If		
+%END REM
+			
+			Set seldoc = foldview.getnextdocument(seldoc)
+		Loop
+		
+		If nlc% = -1 Then
+			Beep
+			Msgbox "Error: No case details document have been selected ", 16, errorstub & errortext
+			status = 1         
+			Exit Sub
+		End If
+		
+		If nlc% <> dc.count-1 Then
+			mc2% = 1
+		End If
+		
+	Else
+		
+         ' get all non exluded documents for inquiry
+         ' find 1st case document for inquiry & period
+		
+		nlc% = -1
+		'Set seldoc=foldview.getfirstdocument       NB The Do Until changed back to For because the letters were not 
+		'Do Until seldoc Is Nothing                                longer produced for All Inquiry cases as seldoc was nothing - JR 19/6/2003
+		For i% = 1 To dc.count
+			Set seldoc = foldview.getnthdocument(i%)
+			If seldoc.form(0) = "livecasedetails" Or seldoc.form(0) = "enforcement" Then   ' DJS 19/01/2012 added the OR
+				nlc% = nlc% + 1               
+				i% = dc.count +1
+			End If 
+%REM WAS ASKED TO REMOVE SCOTTISH TEST 30/04/2012 DJS . . . . . .SIGH!			
+' ADDED SCOTTISH TEST AFTER ISSUE BELATEDLY RAISED 05/04/2012 DJS			
+			If (seldoc.HasItem("scottish") And seldoc.scottish(0) <> ldoc.scottish(0)) Then
+				If(scotchoice <> 6) Then      ' 6 = Yes  7 = No    ' DONT ASK IF THE USER PREVIOUSLY SAID YES TO THE SCOTTISH QUESTION 12/04/2012  DJS 
+					scotchoice = Messagebox ("Warning: Invalid combination of Company and Scottish Letter type " & seldoc.reference(0) & " " & seldoc.Name(0) & ", do you want to continue printing?", 20, errorstub & errortext)
+					If(scotchoice = 7) Then		' 6 = Yes  7 = No		
+						status = 1         
+						Exit Sub
+					End If
+				End If
+			End If			
+%END REM
+			
+		Next
+		
+		If nlc% = -1 Then
+			Beep
+			Msgbox "Error: A case detail document for the required inquiy/period must be selected ", 16, errorstub & errortext
+			status = 1         
+			Exit Sub
+		End If
+		
+		inquiry_code = seldoc.inquiry_code(0)
+		period = seldoc.period(0)
+		
+          ' get inquiry & confirm
+		
+		Call getinquiry()
+		If status <> 0 Then Exit Sub
+		
+		r% = Msgbox("Create letter: " & ldoc.lettername(0) & Chr$(13) & _
+		"For inquiry: " & inquiry_code  & Chr(13) & _
+		"Period: " & period & "?" & Chr$(13) & _
+		"Click on OK to confirm", 1+32, "Confirmation")
+		
+		If r% = 2 Then Exit Sub
+		
+         '  before creating letters need to check that the letter selected is appropriate to the stage of enforcement of the case(s)
+		
+		Call checklettertype()
+		If status <> 0 Then Exit Sub
+		
+		If ltype <> 999 Then
+			If ltype > (checkstage + 1) Then
+				Msgbox("Create letter: " & ldoc.lettername(0) & Chr$(13) & _
+				"This letter type is not appropriate to the cases selected"  & Chr(13) & _
+				"The letter type is:  " & ltypetext  &   "  Please check the case(s)" & Chr$(13) &_
+				"You cannot proceed")
+				Exit Sub
+			End If
+		End If
+		
+		If ldoc.specificinq(0) <> "" Then
+			If seldoc.inquiry_code(0) <> ldoc.specificinq(0) Then
+				Msgbox("Create letter: " & ldoc.lettername(0) & Chr$(13) & _
+				"This letter type is not appropriate to the inquiry selected"  & Chr(13) & _
+				"The letter type is:  " & ldoc.lettername(0)  &   "  The inquiry is " & seldoc.inquiry_code(0) & Chr$(13) &_
+				"You cannot proceed")
+				Exit Sub
+			End If
+		End If
+		
+%REM   the case details now exist on the same form as the request DJS 19/01/2012
+          ' get 1st document for inquiry/period in view
+		
+		Redim ka(1)
+		ka(0) = inquiry_code
+		ka(1) = period
+		If Instr(period,"/") > 0 Then
+			ka(1) = Right(period, 4) & Left(period, 1)
+		End If
+		
+		Set view = db.getview("lcbi")
+		If view Is Nothing Then
+			status = 1
+			Beep
+			Msgbox "Error: Unable to locate view ""lcbi""", 16, "Error"
+			Exit Sub
+		End If
+		
+		Set seldoc = view.getdocumentbykey(ka, True)
+		If seldoc Is Nothing Then
+			status = 1
+			Beep
+			Msgbox "Error: Unable to locate case document for inquiry:" & idoc.inquiry_title(0) & _
+			"Period: " & period, 16, "Error"
+			Exit Sub
+		End If
+		
+          ' get ids of all subsequent case documents for inquiry/period
+		
+		nlc% = -1
+		Do While seldoc.inquiry_code(0) = inquiry_code And seldoc.period(0) = period And Not seldoc Is Nothing
+			If Not Isnumeric(seldoc.exclude(0)) Then seldoc.exclude = 0
+			If seldoc.form(0) = "livecasedetails"  And seldoc.exclude(0) = 0 Then
+				If seldoc.scottish(0) = ldoc.scottish(0) Then
+					nlc% = nlc% + 1               
+					Redim Preserve ids(nlc%)
+					ids(nlc%) = seldoc.universalid
+				End If 
+			End If
+			Set seldoc = view.getnextdocument(seldoc)
+		Loop
+		
+          ' error if none found
+		
+		If nlc% = -1 Then
+			Beep
+			Msgbox "Error: No relevant case details documents found for Inquiry: " & idoc.inquiry_title(0) & _
+			"Period: " & period, 16, "Error"
+			status = 1         
+			Exit Sub
+		End If
+%END REM	
+	End If
+	
+     ' create letters for ids found
+	
+	Call createletters()
+	If status <> 0 Then Exit Sub
+	
+     ' enable deselect agent
+	
+	prdoc.deselect = "y"
+	Call ws.viewrefresh
+	
+	Beep
+	
+	If mc2% = 1 Then
+		Msgbox "Letter(s) created successfully" & Chr$(13) & _
+		" Some non-case details documents were selected and will be ignored", 48, errorstub & errortext
+	Else
+		Msgbox "Letter(s) created successfully", 64, " Information"
+	End If
+	
+' remove folder -   ' ##################################################
+	Set delview = db.getview("(hiddenfolder - selected inquiries)")
+	If delview Is Nothing Then
+		Msgbox "Unable to locate '(hiddenfolder - selected inquiries)' folder. Cannot delete folder.",16,errorstub & errortext
+		Exit Sub
+	End If
+	Call delview.remove
+' ##############################################################
+	
+End Sub
+Sub openprint
+	
+     '***************************************************************
+	
+     ' open print file
+	
+     ' must remove file if already there since written to
+     ' as a binary file otherwise file length will not be reset
+     ' unless new letter longer than previous
+	
+     '***************************************************************
+	
+	status = 0
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	
+'	fname = "c:\temp\letterprint.txt"   CAUSING PROBLEMS PRESUMABLY DUE TO PERMISSIONS DJS 16/10/2012
+'	fname = "h:\ndata\letterprint.txt"    CAUSING PROBLEMS DUE TO NDATA NOT EXISTING  DJS 22/03/2013
+	
+	fname=Environ("Temp")   '  ADDED DJS 22/03/2013
+	If fname="" Then
+		fname=Environ("Tmp")
+		If fname=""  Then
+			Messagebox "No 'TEMP' directory in your environment", 16, errorstub & errortext
+			Exit Sub
+		End If
+	End If
+	fname = fname & "\letterprint.txt" 	
+	Print fname
+	
+	ptext = Dir$(fname)
+	If ptext <> "" Then
+		Kill fname
+	End If
+	fileNum = Freefile()
+	Open fname For Output As filenum Len = 32000
+	
+	
+End Sub
+Sub printcurdoc()
+	
+     '************************************************************************
+     '
+     '  print the letterdocument held in seldoc
+     '    
+     '************************************************************************     
+	
+	Dim papersize As String
+	Dim pageeject As String
+	Dim prinit As String     
+	Dim printerreset As String
+	Dim traynum As String
+	Dim ds As String
+	Dim mfont As String
+	Dim sxcoord As Long			' xcoord for printing signature	
+	Dim iheight As Long              ' height of image in BMP file - used to calculate line count increment after signature
+	Dim rmargin As Integer
+	Dim textpos As Integer
+	Dim lastpos As Integer
+	Dim offset As Integer
+	Dim cpi As Integer
+	Dim m As Integer
+	Dim p As Integer
+	Dim s As Integer
+	
+	status = 0
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 	
+     ' get signatory document for signature if different from previous letter
+	
+	
+'	If seldoc.signatoryid(0) <> signatoryid Then
+'		Set sigdoc = db.getdocumentbyunid(seldoc.signatoryid(0))
+'		If sigdoc Is Nothing Then
+'			signatoryid = ""
+'		Else
+'			signatoryid = seldoc.signatoryid(0)
+'		End If
+'	End If
+	
+	If seldoc.signatory(0) <> signatory Then
+		Set sigdoc = sigvw.getdocumentbykey(seldoc.signatory, True)
+		If sigdoc Is Nothing Then
+			signatory = ""
+		Else
+			signatory = seldoc.signatory(0)
+		End If
+	End If
+	
+    ' record text format effectors (bold etc)
+	
+	ltext = seldoc.body(0)     
+	Call recordfmt()
+	If status <> 0 Then Exit Sub
+	
+     ' get/set print parameters
+	
+	orient = "0"
+	duplex = "n"
+	
+	twidth = seldoc.twidth(0)
+	lmargin = seldoc.lmargin(0)
+	tmargin = seldoc.tmargin(0)
+	pointsize = seldoc.pointsize(0)
+	
+     ' set X, Y coords for margins etc
+	
+	rmargin = lmargin + twidth
+	
+	yinc = (pointsize +2)*600/72
+	startx = lmargin * 600
+	starty = (tmargin * 600) + yinc 
+	
+     ' calculate max no of lines for a4 
+	
+	maxlineno = Cint((10.5 * 600 - tmargin * 600)/yinc) -1
+	
+     ' set main font
+	
+	mfont = Chr$(27) & "(s1p" & pointsize & "v0s0b" & seldoc.font(0) & "T"
+	printerreset = Chr$(27) & "E"
+	
+     %REM
+     	LEXMARK PRINTER MANUAL
+    	Use the following integers to set the paper tray:
+		0 Tray 1
+		1 Tray 2
+		2 Multipurpose Feeder or Envelope Feeder
+		3 Manual Paper
+		4 Manual Envelope
+		5 Tray 3
+		7 Multipurpose Feeder
+		8 Tray 4
+		9 Tray 5
+		Notes:
+		• If the Manual Paper or Manual Envelope source is selected, the Manual-
+		Feed page device parameter is set to true. 
+     %END REM
+     
+	traynum = trayint   'DJS 25/02/2014 
+	
+	%REM
+	ORIGINAL CODE WHICH SEEMED TO WORK FINE FOR NON-LEXMARK PRINTERS, AS THIS STOPPED WORKING CORRECTLY
+	ONCE WE HAD LEXMARK PRINTERS AND THIS CONVERSION MAY CHANGE AGAIN, I PUT ALL THE CONVERSION STUFF 
+	ON THE PRINTER CONFIG DOC - DJS 25/02/2014 	
+     ' set paper parameters
+	Select Case tray
+	Case "1"
+		traynum = "8"
+		
+	Case "2"
+		traynum = "1"
+		
+	Case "3"
+		traynum = "4"
+		
+	Case "4"
+		traynum = "5"
+		
+	Case Else
+		Beep
+		Messagebox "Invalid tray no: " & tray & _
+		"Please inform support", 16, errorstub & errortext
+		status = 1
+		Exit Sub
+		
+	End Select
+%END REM
+	
+	' set paper parameters
+	paper = Lcase(paper)
+	
+	Select Case Lcase(paper)
+		
+	Case "a3"
+		papersize = "27"
+		
+	Case "a4"
+		papersize = "26"
+		
+	Case "other"
+		papersize = ""
+		
+	Case Else
+		Beep
+		Messagebox "Invalid paper size: " & paper & _
+		"Please inform support", 16, errorstub & errortext
+		status = 1
+		Exit Sub
+		
+	End Select
+	
+	Select Case Lcase(duplex)
+		
+	Case "y"
+		If orient = "0" Then 
+			ds = Chr$(27) & "&/2S"
+		Else
+			ds = Chr$(27) & "&/1S"
+		End If
+		
+	Case "n"
+		ds = Chr$(27) & "&/0S"
+		
+	Case Else
+		Beep
+		Messagebox "Invalid duplex option: " & duplex & _
+		"Please inform support", 16, errorstub & errortext
+		status = 1
+		Exit Sub
+		
+	End Select
+	
+     ' set up  printer initialisation    
+	
+	prinit = _
+	Chr$(27) & "%-12345X@PJL SET PAGEPROTECT=OFF" & Chr$(10) &_
+	"@PJL SET RESOLUTION=600" & Chr$(10) & _
+	"@PJL ENTER LANGUAGE=PCL" & Chr$(13) & Chr$(10) & _
+	Chr$(27) & "E" & _
+	Chr$(27) & "*t600R" & _
+	Chr$(27) & "&u600D" & _
+	Chr$(27) & "*r0F" & _
+	Chr$(27) & "&l" & orient & "O" & _
+	Chr$(27) & "&l" & traynum & "H"
+	
+	If papersize = "" Then
+		prinit = prinit & Chr$(27) & "&l8c1E" 
+	Else
+		prinit = prinit & Chr$(27) & "&l"  & papersize & "a8c1E"
+	End If
+	
+	prinit = prinit & _
+	Chr$(27) & "*p0x0Y" & _
+	Chr$(27) & "*c0t5594x8201Y" & _
+	Chr$(27) & "&l1X" & _
+	Chr$(27) & "*b0M" & _
+	Chr$(27) & "(10U" & mfont & _
+	Chr$(13) & Chr$(10)
+	Print #filenum, prinit
+	
+    ' format letter text by paragraph
+	
+	xcoord = startx
+	ycoord = starty 
+	lineno = 0
+	pageno = 0
+	
+	' check if letterhead required
+	
+	If seldoc.useletterhead(0) = "y" Then
+		Call letterhead()	
+	End If
+	
+    ' reset font for rest of letter
+	
+	ptext = Chr$(27) & mfont
+	Print #filenum, ptext	
+	
+    ' print DRAFT on test letters 
+	
+	If testprint = "y" Then
+		ptext =  Chr$(27) & "*p200x200Y" & _
+		Chr$(27) + "(s18VDRAFT" & mfont & Chr$(13)
+		Print #filenum, ptext
+	End If
+	
+	underlineon = False
+	underlinewason = False
+	textpos = 0
+	lastpos = 0
+	
+	Do While Len(ltext) > 0
+		
+          ' chop off next paragraph
+		
+		p% = Instr(ltext, Chr$(13))
+		If p% = 0 Then p% = Len(ltext) + 1
+		ptext = Left$(ltext, p% - 1)
+		ltext = Mid$(ltext, p% + 2)
+		
+          ' check if new page specified 
+		
+		If Instr(ptext, "@newpage@") > 0 Then
+			Call newpage()
+			textpos = textpos + Len(ptext)
+			
+		Else
+               ' check if text not centred or right justified
+			
+			If Instr(ptext, "~S") = 0 Then
+				
+                   ' check if paragraph longer than width of page
+				
+				Do While Len(ptext) > twidth
+					
+                        ' split text on nearest space in relation to page width
+					
+					If Mid$(ptext, twidth + 1, 1) = " " Then 
+						mtext = Left$(ptext, twidth + 1)
+						ptext = Mid$(ptext, twidth + 2)     
+						
+					Elseif Mid$(ptext, twidth, 1) = " " Then
+						mtext = Left$(ptext, twidth)
+						ptext = Mid$(ptext, twidth + 1)     
+					Else
+						s% = twidth
+						Do While Mid$(ptext, s%, 1) <> " " And s% >1 
+							s% = s% -1
+						Loop
+						
+						If s% < 2 Then 
+							mtext = Left$(ptext, twidth)
+							ptext = Mid$(ptext, twidth + 1)     
+						Else
+							mtext = Left$(ptext, s%)
+							ptext = Mid$(ptext, s%+1)
+						End If
+						
+					End If
+					
+                        ' put in any bold ul or italic format effectors
+                        ' if underline spans split lines must switch of at the end
+                        ' of the line and switch on at the start of the next to avoid underlining in margin
+					
+					lastpos = textpos + 1
+					textpos = textpos + Len(mtext)
+					
+					offset% = 0
+					For m% = 0 To Ubound(fmt)
+						If fmtpos(m%) >= lastpos And fmtpos(m%) <= textpos Then 
+							mtext = Left$(mtext, fmtpos(m%)  - lastpos + offset%) & fmt(m%) & Mid$(mtext, fmtpos(m%) - lastpos + offset% + 1)         
+							offset% = offset% + Len(fmt(m%))
+							underlineon = ulon(m%)
+						End If
+					Next
+					
+					If lineno > maxlineno Then
+						Call newpage()
+					End If
+					
+					mtext = Trim(mtext)
+					If underlinewason Then mtext=Chr$(27) & "&d0D" & mtext
+					If underlineon Then mtext=mtext & Chr$(27) & "&d@"
+					mtext = Chr$(27) & "*p" & xcoord & "x" & ycoord & "Y" & _
+					mtext & Chr$(13) & Chr$(10)
+					
+                         ' tc added
+					Call replacepound(mtext)
+					
+					Print #filenum, mtext
+					
+					ycoord = ycoord + yinc
+					lineno = lineno + 1
+					
+					underlinewason = underlineon
+					
+				Loop
+				
+			End If
+			
+              ' last bit of paragraph text
+              ' put in any format effectors
+              ' check for underline spanning separate lines
+			
+			lastpos = textpos + 1
+			textpos = textpos + Len(ptext)
+			
+			offset% = 0
+			
+			For m% = 0 To Ubound(fmt)
+				If fmtpos(m%) >= lastpos And fmtpos(m%) <= textpos+ 1 Then 
+					ptext = Left$(ptext, fmtpos(m%)  - lastpos + offset%) & fmt(m%) & Mid$(ptext, fmtpos(m%) - lastpos + offset% + 1)         
+					offset% = offset% + Len(fmt(m%))
+					underlineon = ulon(m%)
+				End If
+			Next
+			
+              ' replace any centre / right justify commands
+			
+			p% = Instr(ptext, "~S")
+			Do While p% >0
+				If Instr(ptext, "@signature@") = 0 Then
+					ptext = Left$(ptext, p% -1) & _
+					Chr$(27) & "*p" & xcoord & "X " & _
+					Mid$(ptext, p% + 2)
+				Else
+					ptext = Left$(ptext, p% -1) & _
+					"  " & _
+					Mid$(ptext, p% + 2)
+				End If
+				p% = Instr(ptext, "~S")
+			Loop
+			
+			If Instr(ptext, "@signature@") > 0 Then
+				
+			    ' calculate xcoordinate for signature
+				
+				p% = Instr(ptext, "@signature@")
+				cpi = (170/pointsize)
+				sxcoord = ((p%-1) * 0.5)/cpi*600
+				sxcoord = sxcoord + xcoord          
+				ptext = ""
+				Call printbmp(sxcoord,ycoord,"signature", iheight)
+				Print #filenum, ptext
+				
+				' adjust lineno for signature
+				
+				lineno = lineno + Int(iheight/yinc) + 1
+				ycoord = ycoord + iheight + yinc
+				
+			Else
+				
+				If lineno > maxlineno Then
+					Call newpage()
+				End If
+				
+				If underlinewason Then  ptext = Chr$(27) & "&doD" & ptext       
+				If underlineon Then  ptext = ptext & Chr$(27) & "&d@"
+				ptext = Chr$(27) & "*p" & xcoord & "x" & ycoord & "Y" & _
+				ptext & Chr$(13) & Chr$(10)
+				
+                ' tc added
+           '         Messagebox Asc(Mid(ptext,12,1))
+				Call replacepound(ptext)
+				
+				Print #filenum, ptext
+				ycoord = ycoord + yinc
+				lineno = lineno + 1
+				
+			End If
+			
+		End If
+		
+         ' adjust text position to allow for removal of CR and LF from letter text
+		
+		textpos = textpos + 2
+		
+	Loop  
+	
+	Call pagenum()
+	
+     ' reset printer
+	
+	Print #filenum, printerreset
+	
+End Sub
+Sub dateformat
+	
+     '**********************************************************
+	
+     ' format date in indate 
+     ' and place output in formatdate
+	
+     '**********************************************************
+	
+	status = 0
+	
+	If Not(Isdate(indate)) Then 
+		formatdate = ""
+		Exit Sub
+	End If
+	
+	formatdate = Cstr(Day(indate)) & " " & _ 
+	Trim(Mid$("January  February March    April    May      June     July     August   SeptemberOctober  November December ", _
+	(Month(indate) -1)*9 +1, 9)) & " " & _   
+	Cstr( Year(indate))
+	
+End Sub
+Sub checklettertype
+	
+	ltypetext = ldoc.lettertype(0)
+	
+	ltype = 999
+	If ldoc.lettertype(0) = "Pre Enforcement" Then ltype = 1     
+	If ldoc.lettertype(0) = "Warning" Then ltype = 3
+	If ldoc.lettertype(0) = "Final Warning" Then ltype = 4
+	If ldoc.lettertype(0) = "Post Final" Then ltype = 5
+	If ldoc.lettertype(0) = "2nd Prosecution" Then ltype = 6
+	
+  '  find the latest stage that the case has reached
+	
+	checkstage = 999
+	If seldoc.pre_enforcement_date(0) <> "" Then
+		checkstage = 1
+	End If
+	If seldoc.form_date(0) <> "" Then
+		checkstage = 2
+	End If
+	If seldoc.warning_date(0) <> "" Then
+		checkstage = 3
+	End If
+	If seldoc.final_date(0) <> "" Then
+		checkstage = 4
+	End If          
+	If seldoc.post_final_date(0) <>"" Then
+		checkstage = 5
+	End If
+	If seldoc.second_prosecution_date(0) <> "" Then
+		checkstage = 6
+	End If
+	
+	
+End Sub
+Sub getdetails
+	
+     '************************************************************************************************
+     '
+     ' get inquiry, contributor and court documents 
+     ' for associated case document
+	
+     '************************************************************************************************
+	Dim p As Integer
+	
+	status = 0
+	' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+%REM   DJS 19/01/2012
+     ' get company details
+	
+	Set view = db.getview("contriblkup")
+	If view Is Nothing Then
+		status = 1
+		Beep
+		Msgbox "Error: Unable to locate contributor view ""contriblkup""", 16, "Error"
+		Exit Sub
+	End If
+	
+	Set cdoc = view.getdocumentbykey(seldoc.reference, True)
+	
+	If cdoc Is Nothing Then
+		status = 1
+		Beep
+		Msgbox "Error: Could not locate contributor details for reference:" & seldoc.reference(0), 16, "Error"
+		Exit Sub
+	End If
+%END REM	
+	If runopt <> "allinq" Then
+		Call getinquiry()
+		If status <> 0 Then Exit Sub
+	End If  
+	
+     ' get court details if required
+	
+	p% = Instr(ldoc.body(0), "@summonsdate@")
+	If p% = 0 Then p% = Instr(ldoc.body(0), "@hearingdate@")
+	
+	If p% > 0 Then
+		Set view = db.getview("courtlkup")   
+		If view Is Nothing Then
+			status = 1
+			Beep
+			Msgbox "Error: Unable to locate view ""courtlkup""", 16, errorstub & errortext
+			Exit Sub
+		End If
+		
+		Redim ka(2)
+		ka(0) = seldoc.reference(0)
+		ka(1) = seldoc.inquiry_code(0)
+		ka(2) = seldoc.period(0)
+		Set courtdoc = view.getdocumentbykey(ka, True)
+		
+	Else
+		Set courtdoc = Nothing
+		
+	End If
+	
+End Sub
+Sub replacefields
+	
+     '*************************************************************************************************
+     '
+     ' replace field keywords in letter text delineated by @....@ by values from case,
+     ' contributor or inquiry documents
+     '
+     ' also pads centre (~C) and right justify (~R) entries
+     ' with spaces
+     '
+     ' newdoc contains letter details
+     '
+     '*************************************************************************************************
+	Dim a As Integer	
+	Dim i As Integer
+	Dim m As Integer
+	Dim p As Integer
+	Dim r As Integer
+	Dim s As Integer
+	Dim x As Integer
+	Dim y As Integer
+	Dim z As Integer
+	Dim up As Integer
+	Dim quarter As String
+	Dim q As String
+	
+	status = 0
+	maxfactor = 0.5
+	' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	
+	Set cdoc = seldoc   ' DJS 20/01/2012
+	Stop
+     ' insert field data
+	
+	ltext = newdoc.body(0)
+	
+     ' fields which can be on non case documents
+	
+	If noncase = "n" Then
+		
+		p% = Instr(ltext, "@contact@")   
+		Do While p% > 0
+			contact = cdoc.contact  
+			
+			For i% = 0 To Ubound(contact)
+				ltext = Left$(ltext, p%-1) & contact(i%) & Mid$(ltext, p% + Len("@contact@"))
+			Next
+			p% = Instr(ltext, "@contact@")
+		Loop
+		
+		p% = Instr(ltext, "@namedcontact@")   
+		Do While p% > 0 
+			ltext = Left$(ltext, p%-1) & cdoc.named_contact(0) & Mid$(ltext, p% + Len("@namedcontact@"))
+			p% = Instr(ltext, "@namedcontact@")
+		Loop
+		
+' ALLOW TRADING STYLE IN FIRST BLOCK DJS 09/05/2012		
+		p% = Instr(ltext, "@tradingstyle@")   
+		Do While p% > 0 
+			ltext = Left$(ltext, p%-1) & cdoc.tradingas(0) & Mid$(ltext, p% + Len("@tradingstyle@"))
+			p% = Instr(ltext, "@tradingstyle@")
+		Loop
+' ALWAYS USE 950 Enforcement Name when present - DJS 10/08/2012		
+		p% = Instr(ltext, "@company@")   
+		
+		Dim namehold As String                             ' DJS 10/08/2012
+		namehold = cdoc.name(0)                         ' DJS 10/08/2012
+		
+		If ( Not Isempty (cdoc.regname)) Then    ' DJS 10/08/2012
+			If(cdoc.regname(0) <> "") Then            ' DJS 10/08/2012
+				namehold = cdoc.regname(0)           ' DJS 10/08/2012  
+			End If         ' DJS 10/08/2012
+		End If      ' DJS 10/08/2012
+		
+		Do While p% > 0 
+'			ltext = Left$(ltext, p%-1) & cdoc.name(0) & Mid$(ltext, p% + Len("@company@"))  ' DJS 10/08/2012
+			ltext = Left$(ltext, p%-1) & namehold & Mid$(ltext, p% + Len("@company@"))     ' DJS 10/08/2012
+			p% = Instr(ltext, "@company@")
+		Loop
+		
+		p% = Instr(ltext, "@crn@")   
+		Do While p% > 0 
+			ltext = Left$(ltext, p%-1) & cdoc.crn(0) & Mid$(ltext, p% + Len("@crn@"))
+			p% = Instr(ltext, "@crn@")
+		Loop
+		
+		If Instr(ltext, "@address@") > 0 Then  
+			
+               ' get addresses into arrays
+			caddress = cdoc.address	
+			foraddress = cdoc.for1_address
+			for2address = cdoc.for2_address
+			
+' allow for 950 enforcement addresses - apologies for clumsy code its the old empty/null problem  DJS 06/03/2012		
+			If ( Not Isempty (cdoc.regoffice)) Then
+				If(cdoc.regoffice(0) <> "") Then
+					caddress = cdoc.regoffice
+					foraddress = cdoc.address    ' DJS 28/03/2012 trying to fix the 950 two addresses display issue
+'					for2address = cdoc.address    ' DJS 28/03/2012 trying to fix the 950 two addresses display issue
+				End If
+			End If
+			
+               ' append for2 address on end of for1 address
+			
+			x% = Ubound(foraddress)
+			for2start = x% + 2
+			
+			If for2address(0) <> "" Then
+				y% = Ubound(for2address)
+				Redim Preserve for1address(x% + y% + 2)
+				For z% = x% +2 To x% + y% + 2
+					foraddress(z%) = for2address(z% - x% - 2)
+				Next
+			End If
+			
+               ' find max no of lines for address(es)
+			
+			x% = Ubound(caddress)
+			y% = Ubound(foraddress)
+			If x%>y% Then 
+				z% = x%
+			Else
+				z% = y%
+			End If
+			
+              ' find longest line in for addresses for justification
+			
+			r% = 0
+			s% = 0
+			If foraddress(0) = "" Then 
+				y% = -1
+			Else
+				If y% > 0 Then
+					For p% = 0 To y% 
+						If Len(foraddress(p%)) > r% Then
+							r% = Len(foraddress(p%))
+							s% = p%
+						End If
+					Next
+				End If
+				
+				mtext = foraddress(s%)
+				Call jtext()
+				If status <> 0 Then Exit Sub
+				
+			End If
+			
+              ' insert address lines
+			
+			p% = Instr(ltext, "@address@")   
+			Do While p% > 0
+				
+				mtext =  Mid$(ltext, p% + Len("@address@"))     
+				ltext = Left$(ltext, p%-1) 
+				
+				For a% = 0 To z%
+					
+					If a% <= x% Then
+						ltext = ltext & caddress(a%)
+					End If
+					
+					If a% <= y% Then
+						If a% = 0 Then
+							ltext = ltext & "~S" & Space$(nspace - 8) & "For: " & foraddress(a%) 
+						Elseif a% = for2start Then
+							ltext = ltext & "~S" & Space$(nspace - 16) & "For Including: " & foraddress(a%) 
+						Else
+							ltext = ltext & "~S" & Space$(nspace) & foraddress(a%)
+						End If
+						
+					End If
+					
+					ltext = ltext & Chr$(13) & Chr$(10)
+					
+				Next
+				
+				ltext = ltext & mtext
+				p% = Instr(ltext, "@address@")
+				
+			Loop
+		End If
+		
+		
+		p% = Instr(ltext, "@regaddress@")   
+		Do While p% > 0
+			caddress = cdoc.address	
+' allow for 950 enforcement addresses - apologies for clumsy code its the old empty/null problem  DJS 06/03/2012		
+			If ( Not Isempty (cdoc.regoffice)) Then
+				If(cdoc.regoffice(0) <> "") Then
+					caddress = cdoc.regoffice
+				End If
+			End If
+			z% = Ubound(caddress)
+			mtext =  Mid$(ltext, p% + Len("@regaddress@"))     
+			ltext = Left$(ltext, p%-1) 
+			For a% = 0 To z%
+				ltext = ltext & caddress(a%)
+				If a% < z% Then ltext = ltext & ", "
+                 '   If a% < z% Then ltext = ltext & Chr$(13) & Chr$(10)
+			Next
+			ltext = ltext & mtext
+			p% = Instr(ltext, "@regaddress@")
+		Loop
+		
+		p% = Instr(ltext, "@regaddressformat@")   
+		Do While p% > 0
+			caddress = cdoc.address	
+' allow for 950 enforcement addresses - apologies for clumsy code its the old empty/null problem  DJS 06/03/2012		
+			If ( Not Isempty (cdoc.regoffice)) Then
+				If(cdoc.regoffice(0) <> "") Then
+					caddress = cdoc.regoffice
+				End If
+			End If
+			z% = Ubound(caddress)
+			mtext =  Mid$(ltext, p% + Len("@regaddressformat@"))     
+			ltext = Left$(ltext, p%-1) 
+			For a% = 0 To z%
+				ltext = ltext & caddress(a%)
+                '    If a% < z% Then ltext = ltext & ", "
+				If a% < z% Then ltext = ltext & Chr$(13) & Chr$(10)
+			Next
+			ltext = ltext & mtext
+			p% = Instr(ltext, "@regaddressformat@")
+		Loop
+		
+		p% = Instr(ltext, "@ourref@")   
+		Do While p% > 0 
+			sicyear = seldoc.sicyear(0)
+			'the cdoc.sic92(0) & cdoc.sic07(0) was removed from the following code - 3rd & 7th line down 10/08/2008 Gwyn R120778   
+			If sicyear = "2003" Then
+				ltext = Left$(ltext, p%-1) & _
+				seldoc.inquiry_code(0)  & "/" & cdoc.reference(0) & "/ENF" & _
+				Mid$(ltext, p% + Len("@ourref@"))
+			Elseif sicyear = "2007" Then
+				ltext = Left$(ltext, p%-1) & _
+				seldoc.inquiry_code(0) & "/" & cdoc.reference(0) & "/ENF" & _
+				Mid$(ltext, p% + Len("@ourref@"))
+			Elseif sicyear = "" Then
+				ltext = Left$(ltext, p%-1) & _
+				seldoc.inquiry_code(0) & "/" & cdoc.reference(0) & "/ENF" 
+			Else
+				ltext = Left$(ltext, p%-1) & _
+				seldoc.inquiry_code(0) & "/" & cdoc.reference(0) & "/ENF" 
+			End If
+			p% = Instr(ltext, "@ourref@")
+		Loop
+		
+		 ' REPLACEFIELDS AFTER OUR REF
+		
+		p% = Instr(ltext, "@nesref@")   
+		Do While p% > 0 
+			ltext = Left$(ltext, p%-1) & _
+			seldoc.inquiry_code(0) & "/"  & cdoc.reference(0) & "/ENF" & _
+			Mid$(ltext, p% + Len("@nesref@"))
+			p% = Instr(ltext, "@nesref@")
+		Loop
+		
+		p% = Instr(ltext, "@forcompany@")   
+		Do While p% > 0 
+'			If cdoc.for1_name(0) <> "" Then     ' THIS FIELD NO LONGER EXISTS DJS 09/05/2012
+			If cdoc.tradingas(0) <> "" Then         ' THEY ASKED FOR TRADING STYLE  DJS 09/05/2012
+				mtext = cdoc.tradingas(0)         ' THEY ASKED FOR TRADING STYLE  DJS 09/05/2012
+'				mtext = cdoc.for1_name(0)         ' THIS FIELD NO LONGER EXISTS DJS 09/05/2012
+			Else
+				mtext = cdoc.name(0)
+			End If
+			ltext = Left$(ltext, p%-1) & mtext & Mid$(ltext, p% + Len("@forcompany@"))
+			p% = Instr(ltext, "@forcompany@")
+		Loop
+		
+		p% = Instr(ltext, "@vatref@")   
+		Stop
+		Do While p% > 0 
+' WRONGLY ACCESSING newvatref DJS 28/02/2013		ltext = Left$(ltext, p%-1) & cdoc.newvatref(0) & Mid$(ltext, p% + Len("@vatref@"))
+			ltext = Left$(ltext, p%-1) & cdoc.vatref(0) & Mid$(ltext, p% + Len("@vatref@"))   '  DJS 28/02/2013	
+			p% = Instr(ltext, "@vatref@")
+		Loop
+		
+		p% = Instr(ltext, "@inquiry@")   
+		Do While p% > 0 
+			ltext = Left$(ltext, p%-1) & idoc.inquiry_title(0) & Mid$(ltext, p% + Len("@inquiry@"))
+			p% = Instr(ltext, "@inquiry@")
+		Loop
+		
+		p% = Instr(ltext, "@INQUIRY@")   
+		Do While p% > 0
+			If Trim(idoc.title_part2(0)) = "" Then
+				ltext = Left$(ltext, p%-1) & idoc.title_part1(0) & Mid$(ltext, p% + Len("@INQUIRY@"))
+			Else   
+				ltext = Left$(ltext, p%-1) & idoc.title_part1(0) & Chr$(13) & Chr$(10) & _
+				idoc.title_part2(0) &  Mid$(ltext, p% + Len("@INQUIRY@"))
+			End If
+			p% = Instr(ltext, "@INQUIRY@")   
+		Loop
+		
+		p% = Instr(ltext, "@inquirydesc@")   
+		Do While p% > 0 
+			ltext = Left$(ltext, p%-1) & idoc.inquirydesc(0) & Mid$(ltext, p% + Len("@inquirydesc@"))
+			p% = Instr(ltext, "@inquirydesc@")
+		Loop
+		
+		p% = Instr(ltext, "@inqprosec@")   
+		Do While p% > 0 
+			ltext = Left$(ltext, p%-1) & idoc.inqprosec(0) & Mid$(ltext, p% + Len("@inqprosec@"))
+			p% = Instr(ltext, "@inqprosec@")
+		Loop
+		
+		p% = Instr(ltext, "@inqperiod@")   
+		up% = Instr(ltext, "@INQPERIOD@")   
+		Do While p% > 0 Or up% > 0
+			
+              ' format period depending on inquiry tyoe
+			
+'			Select Case idoc.inquiry_type(0)    ' WAS GIVING FORMAT ISSUES DJS 09/05/2012
+			Select Case seldoc.inqtype(0)
+				
+			Case "A"
+				inqperiod =  Left(seldoc.period(0),4)  ' DJS 09/05/2012
+				
+			Case "Q"
+				quarter = Right$(seldoc.period(0), 2) 
+				Select Case quarter                          ' DJS 09/05/2012 SIGH !
+				Case "01","02","03" : q = 1
+				Case "04","05","06" : q = 2
+				Case "07","08","09" : q = 3
+				Case "10","11","12" : q = 4					
+				End Select
+'				inqperiod =  "Q" & Left$(seldoc.period(0), 1) & "/" & Left(seldoc.period(0), 4)
+				inqperiod =  "Q" & q & "/" & Left(seldoc.period(0), 4)
+				
+			Case "M"              
+				
+				m% = (Cdbl(Right$(seldoc.period(0), 2)) -1)*9 + 1
+				
+				inqperiod = Trim(Mid$(_
+				"January  February March    April    May      June     " & _
+				"July     August   SeptemberOctober  November December ", m%, 9)) & _
+				" " & Left$(seldoc.period(0), 4)
+				
+			Case Else
+				Beep
+				status = 1               
+	'			Msgbox "Error: Invalid Inquiry type: " & idoc.inquiry_type & "  for inquiry: " & seldoc.inquiry_code(0), 16, errorstub & errortext
+				Msgbox "Error: Invalid Inquiry type: " & seldoc.inqtype(0) & "  for inquiry: " & seldoc.inquiry_code(0), 16, errorstub & errortext
+				Exit Sub
+				
+			End Select
+			
+			If up% > 0 Then 
+				ltext = Left$(ltext, up%-1) & Ucase(inqperiod) & Mid$(ltext, up% + Len("@inqperiod@"))
+			Else
+				ltext = Left$(ltext, p%-1) & inqperiod & Mid$(ltext, p% + Len("@inqperiod@"))
+			End If
+			
+			p% = Instr(ltext, "@inqperiod@")
+			up% = Instr(ltext, "@INQPERIOD@")   
+			
+		Loop  
+' @@@@@@@@@@@@@ FORMDATE is now questionnaire_date		
+		p% = Instr(ltext, "@formdate@")   
+		Do While p% > 0
+'			indate = seldoc.form_date(0)
+			indate = seldoc.questionnaire_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@formdate@"))
+			p% = Instr(ltext, "@formdate@")
+		Loop
+' @@@@@@@@@@@@@ FORMEXPIRY is now questionnaire_expiry_date				
+		p% = Instr(ltext, "@formexpiry@")   
+		Do While p% > 0
+'			indate = seldoc.form_expiry_date(0)
+			indate = seldoc.questionnaire_expiry_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@formexpiry@"))
+			p% = Instr(ltext, "@formexpiry@")
+		Loop
+' @@@@@@@@@@@@@ THERE IS NO CONCEPT OF PRE ENFORCEMENT NOW DJS 20/04/2012	
+%REM		
+		p% = Instr(ltext, "@preenfdate@")   
+		Do While p% > 0 
+			indate = seldoc.pre_enforcement_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@preenfdate@"))
+			p% = Instr(ltext, "@preenfdate@")
+		Loop
+
+		p% = Instr(ltext, "@preenfexpiry@")   
+		Do While p% > 0 
+			indate = seldoc.pre_enforce_expiry_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@preenfexpiry@"))
+			p% = Instr(ltext, "@preenfexpiry@")
+		Loop 
+%END REM
+		
+		p% = Instr(ltext, "@warndate@")   
+		Do While p% > 0 
+			indate = seldoc.warning_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@warndate@"))
+			p% = Instr(ltext, "@warndate@")
+		Loop
+		
+		p% = Instr(ltext, "@warnexpiry@")   
+		Do While p% > 0 
+			indate = seldoc.warning_expiry_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@warnexpiry@"))
+			p% = Instr(ltext, "@warnexpiry@")
+		Loop
+		
+		p% = Instr(ltext, "@finaldate@")   
+		Do While p% > 0 
+			indate = seldoc.final_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@finaldate@"))
+			p% = Instr(ltext, "@finaldate@")
+		Loop
+		
+		p% = Instr(ltext, "@finalexpiry@")   
+		Do While p% > 0 
+			indate = seldoc.final_expiry_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@finalexpiry@"))
+			p% = Instr(ltext, "@finalexpiry@")
+		Loop
+' @@@@@@@@@@@@@ THERE IS NO CONCEPT OF POST FINAL NOW DJS 20/04/2012
+%REM
+		p% = Instr(ltext, "@postfinaldate@")   
+		Do While p% > 0 
+			indate = seldoc.post_final_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@postfinaldate@"))
+			p% = Instr(ltext, "@postfinaldate@")
+		Loop
+
+		p% = Instr(ltext, "@postfinalexpiry@")   
+		Do While p% > 0 
+			indate = seldoc.post_final_expiry_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@postfinalexpiry@"))
+			p% = Instr(ltext, "@postfinalexpiry@")
+		Loop
+%END REM		
+		p% = Instr(ltext, "@2ndprosdate@")   
+		Do While p% > 0 
+			indate = seldoc.second_prosecution_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@2ndprosdate@"))
+			p% = Instr(ltext, "@2ndprosdate@")
+		Loop
+		
+		p% = Instr(ltext, "@2ndprosexpiry@")   
+		Do While p% > 0 
+			indate = seldoc.second_prosecu_exp_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@2ndprosexpiry@"))
+			p% = Instr(ltext, "@2ndprosexpiry@")
+		Loop    
+		
+' ADDED THIS BLOCK JUST IN CASE DJS 14/06/2012		
+		p% = Instr(ltext, "@2ndproshearingdate@")   
+		Do While p% > 0 
+			indate = seldoc.second_prosecution_hearing_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@2ndproshearingdate@"))
+			p% = Instr(ltext, "@2ndproshearingdate@")
+		Loop    
+		
+' @@@@@@@@@@@@@ THERE IS NO RECEIVED DATE 			DJS 20/04/2012
+%REM
+		p% = Instr(ltext, "@receiveddate@")   
+		Do While p% > 0 
+			indate = seldoc.received_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@receiveddate@"))
+			p% = Instr(ltext, "@receiveddate@")
+		Loop
+%END REM
+		
+		p% = Instr(ltext, "@summonsdeadline@")   
+		Do While p% > 0 
+			indate = seldoc.summonsdeadline(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@summonsdeadline@"))
+			p% = Instr(ltext, "@summonsdeadline@")
+		Loop
+' IS THIS THE HEARING DATE ?		 THERE IS NO COURT DOC NOW
+' SO COMMENT OUT THE IF COURTDOC DJS 14/06/2012		
+'		If Not courtdoc Is Nothing Then
+		p% = Instr(ltext, "@summonsdate@")   
+		Do While p% > 0 
+			indate = seldoc.summons_date(0)    ' SELDOC NOT COURTDOC  DJS 14/06/2012	
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@summonsdate@"))
+			p% = Instr(ltext, "@summonsdate@")
+		Loop
+'		End If
+' NOW THE HEARING DATE ON THE ENFORCEMENT FORM
+' SO COMMENT OUT THE IF COURTDOC DJS 14/06/2012	
+'		If Not courtdoc Is Nothing Then
+		p% = Instr(ltext, "@hearingdate@")   
+		Do While p% > 0 
+'			indate = courtdoc.court_date(0)   ' SELDOC NOT COURTDOC  DJS 14/06/2012	
+			indate = seldoc.hearing_date(0)
+			Call dateformat()
+			If status <> 0 Then Exit Sub
+			ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@hearingdate@"))
+			p% = Instr(ltext, "@hearingdate@")
+		Loop
+'		End If
+		
+	End If
+	
+     ' fields which can be on non case documents
+	
+	p% = Instr(ltext, "@date@")   
+	Do While p% > 0 
+		indate = letterdate
+		Call dateformat()
+		If status <> 0 Then Exit Sub
+		ltext = Left$(ltext, p%-1) & formatdate & Mid$(ltext, p% + Len("@date@"))
+		p% = Instr(ltext, "@date@")
+	Loop
+	
+	p% = Instr(ltext, "@signatory@")   
+	Do While p% > 0 
+		ltext = Left$(ltext, p%-1) & sigdoc.name(0) & Mid$(ltext, p% + Len("@signatory@"))
+		p% = Instr(ltext, "@signatory@")
+	Loop
+	
+     ' make sure newpage on a line on its own
+	
+	p% = Instr(ltext, "@newpage@")   
+	Do While p% > 0 
+		If p% > 1 Then 
+			If Mid$(ltext, p% -1) <>Chr$(10) _
+			And Mid$(ltext, p% -1) <>Chr$(13) Then
+				ltext = Left$(ltext, p%-1) & Chr$(13) & Chr$(10) & Mid$(ltext, p%)
+				p% = p% + 2
+			End If
+			
+			If Mid$(ltext, p% + 9) <>Chr$(10) _
+			And Mid$(ltext, p% + 9) <>Chr$(13) Then
+				ltext = Left$(ltext, p% + 8) & Chr$(13) & Chr$(10) & Mid$(ltext, p%+9)
+				p% = p% + 2
+			End If
+			
+		End If
+		p% = Instr(p%, ltext, "@newpage@")
+	Loop
+	
+     ' replace right justifies
+	
+	p% = Instr(ltext, "~R")
+	Do While p% > 0
+		
+		x% = Instr(p% + 1, ltext, "~R")
+		If x% = 0 Then 
+			Beep
+			status = 1               
+			Msgbox "Error: Unmatched right justify markers (~R) in letter text", 16, errorstub & errortext
+			Exit Sub
+		End If
+		
+		mtext = Mid$(ltext, p% +2, x%-p%-2)
+		Call jtext()
+		If status <> 0 Then Exit Sub
+		
+		ltext = Left(ltext, p% - 1) & "~S" & Space$(nspace) & mtext & Mid$(ltext, x% + 2)
+		p% = Instr(p% +2, ltext, "~R")
+		
+	Loop
+	
+    ' replace centre justifies
+	
+	p% = Instr(ltext, "~C")
+	Do While p% > 0
+		
+		x% = Instr(p% + 1, ltext, "~C")
+		If x% = 0 Then 
+			Beep
+			status = 1               
+			Msgbox "Error: Unmatched centre justify markers (~C) in letter text", 16, errorstub & errortext
+			Exit Sub
+		End If
+		
+		mtext = Mid$(ltext, p% +2, x%-p%-2)
+		Call jtext()
+		If status <> 0 Then Exit Sub
+		nspace = Int(nspace/2)
+		
+		ltext = Left(ltext, p% - 1) & "~S" & Space$(nspace) & mtext & Mid$(ltext, x% + 2)         
+		p% = Instr(p% +2, ltext, "~C")
+		
+	Loop
+	
+	newdoc.body = ltext
+	
+End Sub
+Sub newpage()
+	
+     '******************************************************************************************
+	
+     ' start a new page
+	
+     '******************************************************************************************
+	
+	Call pagenum()
+	
+	xcoord = startx
+	ycoord = starty
+	lineno = 0
+	
+	Print #filenum, Chr$(12)
+	
+End Sub
+Sub getinquiry
+	
+      '*********************************************************************************
+	
+      ' get inquiry details document
+	
+     '*********************************************************************************
+	
+	status = 0
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 	
+	
+	Set view = db.getview("inquiries")
+	If view Is Nothing Then
+		status = 1
+		Beep
+		Msgbox "Error: Unable to locate view ""inquiries""", 16,errorstub & errortext
+		Exit Sub
+	End If
+	
+	Set idoc = view.getdocumentbykey(seldoc.inquiry_code(0), True) ' DJS 17/04/2012
+	
+	If idoc Is Nothing Then
+		status = 1
+		Beep
+		Msgbox "Error: Could not locate inquiry details for inquiry:" & seldoc.inquiry_code(0),16,errorstub & errortext
+	End If
+	
+End Sub
+Sub getcommand()
+	
+     '*****************************************************************     
+	
+     ' get next complete printer command from inadata
+     ' and place in nextbit
+	
+     '*****************************************************************
+	
+	Dim rastlen As Long
+	Dim indata As Integer
+	Dim nextbit As Integer
+	Dim p As Integer
+	
+	endcom = 0
+	
+	If Len(indata) = 0 Then
+		endcom = 1
+		Exit Sub
+	End If
+	
+     ' if not escape character or @ send as single byte
+	
+	If Left$(indata, 1) <> Chr$(27) And Left(indata,1) <> "@" Then
+		nextbit = Left$(indata, 1)
+		indata = Mid$(indata, 2)
+		Exit Sub
+	End If
+	
+	If Left$(indata, 1) = "@" Then 
+		p% = Instr(indata, Chr$(10))
+		If p% = 0 Then
+			endcom = 1 
+			Exit Sub
+		End If
+		
+		If Mid$(indata, p% + 1) = Chr$(13) Then
+			p% = p% + 1
+		End If
+		
+		nextbit = Left$(indata, p%)
+		indata = Mid$(indata, p% + 1)
+		
+		Exit Sub          
+	End If
+	
+     ' find end of command - 1st capital letter
+	
+	p% = 1
+	Do While Instr("ABCDEFGHIJKLMNOPQRSTUVWXYZ", Mid$(indata, p%, 1)) = 0 And p% < Len(indata)
+		p% = p% +1
+	Loop
+	
+     ' exit if not complete command
+	
+	If  Instr("ABCDEFGHIJKLMNOPQRSTUVWXYZ", Mid$(indata, p%, 1)) = 0 Then
+		endcom = 1
+		Exit Sub
+	End If
+	
+     ' check if not a raster data command 
+	
+	If Left$(indata, 3) <> Chr$(27) & "*b" _
+	Or  Mid$(indata, p%, 1) <> "W" Then
+		nextbit = Left$(indata, p%)
+		indata = Mid$(indata, p% + 1)
+		Exit Sub          
+	End If
+	
+     ' raster command - must get next # bytes specified after Esc*b
+	
+	rastlen = Clng(Mid$(indata, 4, p% -4))
+	
+     ' exit if not enough bytes in indata
+	
+	If Len(indata) < p% + rastlen Then
+		endcom = 1
+		Exit Sub
+	End If
+	
+	nextbit = Left$(indata, p% + rastlen)
+	indata = Mid$(indata, p% + rastlen + 1)
+	
+End Sub
+Sub printbmp(lx As Long, ly As Long, logo As String, iheight As Long)
+	
+	'***********************************************************************
+	
+	' print bmp file
+	
+	' parameters
+	
+	' lx  - x coord at which to print
+	' ly  - y coord at which to print
+	' logo - type of file one of:
+	'                     crest - crest logo
+	'                     logo  - ONS logo 
+	'                     oldlogo  - Old ONS logo 
+	'                     signature - bmp of staff signature
+	' iheight - returns maximum depth of logo for adjusting liine count
+	
+	'***********************************************************************
+	Dim lview As notesview
+	Dim logodoc As notesdocument
+	
+	Dim bmpfile As String
+	Dim intext As String
+	Dim outtext As String
+	Dim curchar As String
+	Dim lastchar As String
+	Dim ztext As String
+	Dim dataoffset As Long
+	Dim iwidth As Long
+	Dim ibytesperrow As Long
+	Dim lastbyte As Integer
+	Dim andval As Integer
+	Dim comp As Integer
+	Dim bc As Integer
+	Dim ccount As Integer	
+	Dim inf As Integer
+	Dim padbits As Integer
+	Dim c As Integer
+	Dim i As Integer
+	Dim l As Integer
+	Dim o As Integer
+	Dim r As Integer
+	Dim s As Integer
+	Dim ns As Integer
+	Dim nz As Integer
+	
+	' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	
+	If logo = "signature" Then	
+		
+		If signatory = "" Then
+			ycoord = ycoord + yinc + 3
+			lineno = lineno + 3
+			Exit Sub
+		End If
+		
+		Set rti = sigdoc.getfirstitem("signature")
+		
+	Else
+		
+		Set logodoc = logovw.getdocumentbykey(logo, True)
+		If logodoc Is Nothing Then
+			Messagebox "Error: Logo document not found for: " & logo,16,errorstub & errortext
+			Exit Sub
+		End If
+		
+		Set rti = logodoc.getfirstitem("bmpfile")
+		
+	End If
+	
+	If Isarray(rti.embeddedobjects) Then
+		If rti.embeddedobjects(0).type = 1454 Then
+'			bmpfile =  "c:\temp\" & rti.embeddedobjects(0).source CAUSING PROBLEMS PRESUMABLY DUE TO PERMISSIONS DJS 16/10/2012
+''			bmpfile =  "h:\ndata\" & rti.embeddedobjects(0).source		CAUSING PROBLEMS DUE TO NDATA NOT EXISTING  DJS 22/03/2013	
+			
+			bmpfile=Environ("Temp")   '  ADDED DJS 22/03/2013
+			If bmpfile="" Then
+				bmpfile=Environ("Tmp")
+				If bmpfile=""  Then
+					Messagebox "No 'TEMP' directory in your environment", 16, errorstub & errortext
+					Exit Sub
+				End If
+			End If
+			bmpfile = bmpfile & "\" & rti.embeddedobjects(0).source  '  ADDED DJS 22/03/2013
+			Print fname
+			Call rti.embeddedobjects(0).extractfile(bmpfile )
+		End If		
+	End If
+	
+	If bmpfile = "" Then 		
+		If logo = "signature" Then	
+			ycoord = ycoord + yinc + 3
+			lineno = lineno + 3
+		End If
+		Exit Sub
+	End If
+	
+	comp =1
+	
+	inf% = Freefile()
+	Open bmpfile For Input As inf%
+	
+	' get bmp header
+	
+	intext = Input (14, #inf%)			
+	
+	If Left$(intext, 2) <> "BM" Then
+		Msgbox "Error: input file is not BMP format",16,errorstub & errortext
+		Close #inf%	
+		Exit Sub		
+	End If
+	
+	dataoffset = Asc(Mid$(intext, 11, 1)) + _
+	Asc(Mid$(intext, 12, 1)) * 256 + _ 
+	Asc(Mid$(intext, 13, 1)) * 256^2 + _ 
+	Asc(Mid$(intext, 14, 1)) * 256^3 + 1
+	
+	' get infoheader
+	
+	Seek #inf%, 15
+	intext = Input (40, #inf%)			
+	
+	' get bitmap width
+	
+	iwidth = Asc(Mid$(intext, 5, 1)) + _
+	Asc(Mid$(intext, 6, 1)) * 256 + _ 
+	Asc(Mid$(intext, 7, 1)) * 256^2 + _ 
+	Asc(Mid$(intext, 8, 1)) * 256^3
+	
+	' get no of bytes per image row 
+     ' padded to 4 byte boundary for each row
+	' find last byte in image row containing image data
+	
+	ibytesperrow = Fix((iwidth+7)/8)
+	lastbyte = ibytesperrow
+	If ibytesperrow Mod 4 > 0 Then
+		ibytesperrow = ibytesperrow + 4-(ibytesperrow Mod 4)
+	End If	
+	
+	' calculate no of bits used for padding in last byte used for data
+	' andval used to mask unused bits
+	
+	padbits% = 8 - (iwidth - Fix(iwidth/8) * 8)
+	andval = 255
+	For o% = 0 To padbits% -1
+		andval = andval - 2^o%
+	Next
+	
+	' get bitmap height
+	
+	iheight = Asc(Mid$(intext, 9, 1)) + _
+	Asc(Mid$(intext, 10, 1)) * 256 + _ 
+	Asc(Mid$(intext, 11, 1)) * 256^2 + _ 
+	Asc(Mid$(intext, 12, 1)) * 256^3
+	
+	' check image data
+	
+	' check no of planes
+	
+	If Asc(Mid$(intext, 13, 1)) <> 1 Then
+		Msgbox "Error - Image must be monochrome (black and white)",16,errorstub & errortext
+		Close #inf%	
+		Exit Sub		
+	End If
+	
+	' check bitcount
+	
+	If Asc(Mid$(intext, 15, 1)) <> 1 Then
+		Msgbox "Error - Image must be monochrome (black and white)",16,errorstub & errortext
+		Close #inf%	
+		Exit Sub		
+	End If
+	
+	' check compression
+	
+	If Asc(Mid$(intext, 17, 1)) <> 0 Then
+		Msgbox "Error - Image is compressed - image must be uncompressed, monochrome (black and white)",16,errorstub & errortext
+		Close #inf%	
+		Exit Sub		
+	End If
+	
+	' check no of colours used
+	
+	If Asc(Mid$(intext, 33, 1)) <> 2 Then
+		Msgbox "Error - image must be monochrome (black and white)",16,errorstub & errortext
+		Close #inf%	
+		Exit Sub		
+	End If
+	
+	' open output file
+	
+	' create raster header
+	
+	ptext = ptext & _
+	Chr$(27) & "*p" & lx & "x" & ly & "Y" & _
+	Chr$(27) & "*r0F" & _
+	Chr$(27) & "*r1A"
+	
+	If comp = 1 Then
+		ptext = ptext & Chr$(27) & "*b2M"
+	Else
+		ptext = ptext & Chr$(27) & "*b0M"
+	End If
+	
+	' pass through file 
+	' bmp stored bottom to top
+	' raster must be top to bottom
+	
+	For r% = iheight To 1 Step -1
+		
+			' get row data
+		
+		Seek #inf%, dataoffset + ibytesperrow * Clng(r% -1)			
+		intext = Input (ibytesperrow, #inf%)	
+		
+		outtext = ""
+		ztext = ""
+		
+		nz% = 1
+		
+		For c% = 1 To ibytesperrow
+			
+			If lastbyte < c% Then
+				
+					' whole byte is padding set to 0's 
+				
+				curchar = Chr$(0)
+				
+				
+			Elseif lastbyte = c% Then
+				
+					' last byte containing data for this character
+					' flip all bits and mask out padding bits (set all to 0) using andval 
+				
+				curchar = Chr$((255 - Asc(Mid$(intext, c%, 1))) And andval)
+				
+			Else
+				
+					' whole byte contains image data - flip all bits
+				
+				curchar = Chr$(255 - Asc(Mid$(intext, c%, 1)))			
+				
+			End If
+			
+			' check for trailing zero bytes/completely blank lines
+			
+			If curchar <> Chr$(0) Then 
+				nz% = 0
+				outtext = outtext & ztext & curchar
+				ztext = ""				
+			Else
+				ztext = ztext & curchar 
+			End If
+			
+		Next
+		
+		
+		l% = Len(outtext)
+		
+		' write out raster data
+		
+		If nz% = 0 Then
+			
+			If comp = 1 Then
+				
+				intext = outtext
+				outtext = ""
+				bc = 0
+				lastchar = Left$(intext, 1)
+				i% = 1
+				s% = 1
+				
+				Do While  i% <= Len(intext)
+					
+					curchar = Mid$(intext, i%, 1)
+					bc = bc + 1
+					
+					If curchar = lastchar Then
+						
+						If bc = 128 Or i% = Len(intext) Then
+							If bc = 1 Then
+								outtext = outtext & Chr$(0) & curchar 
+							Else
+								outtext = outtext & Chr$(256 - bc + 1) & curchar 
+							End If
+							bc = 0
+							s% = i% + 1
+							If i% < Len(intext) Then lastchar = Mid$(intext, s%, 1)
+						End If
+						
+						i% = i% + 1
+						
+					Else
+						
+						If bc > 3 Then
+							
+							bc = bc - 1
+							outtext = outtext & Chr$(256 - bc + 1) & lastchar 
+							lastchar = curchar
+							bc = 0
+							s% = i%
+							
+						Else
+							
+							ns% = 1
+							
+							Do While bc < 127 _
+							And i% < Len(intext) _ 
+							And ns% < 3
+								
+								lastchar = curchar
+								bc = bc + 1
+								i% = i% + 1
+								curchar = Mid$(intext, i%, 1)
+								
+								If curchar = lastchar Then 
+									ns% = ns% +1
+								Else
+									ns% = 1 
+								End If
+								
+							Loop
+							
+							If ns% > 2 Then
+								bc = bc - ns%
+								i% = i% - ns%
+							End If
+							
+							outtext = outtext & Chr$(bc - 1) & _
+							Mid$(intext, s%, bc)
+							
+							bc = 0
+							i% = i% + 1
+							s% = i%
+							If i% < Len(intext) Then lastchar = Mid$(intext, s%, 1)
+							
+						End If
+					End If
+					
+				Loop
+				
+			End If
+			
+			ptext = ptext & _   
+			Chr$(27) & "*b" & Len(outtext) & "W" & outtext
+			
+		Else
+			
+			ptext = ptext & _      
+			Chr$(27) & "*b1Y"
+			
+		End If
+		
+	Next
+	
+	ptext = ptext & _      
+	Chr$(27) & "*rB" 
+	
+	Close #inf%	
+	
+	
+End Sub
+Sub formatbody2(doc As notesdocument)
+	
+     '*************************************************************************************
+     '
+     '  main entry point from letter documents
+     '
+     ' format read only copy field of letter held in doc
+     '
+     '************************************************************************************
+	Dim p As Integer
+	Dim s As Integer
+	Dim y As Integer
+	Dim z As Integer
+	Dim ln As Integer
+	status = 0
+	
+	ltext = doc.body(0)
+	twidth = doc.twidth(0)
+	
+     ' remove all format effectors
+	
+	p% = Instr(ltext, "^")
+	Do While p% > 0
+		ltext = Left$(ltext, p%-1) & Mid$(ltext, p%+2)
+		p% = Instr(ltext, "^")
+	Loop
+	
+     ' process text putting formatted lines in letterlist array
+	
+	Redim letterlist(0)
+	ln% = -1
+	
+	Do While Len(ltext) > 0
+		
+          ' chop off next paragraph
+		
+		p% = Instr(ltext, Chr$(13))
+		If p% = 0 Then p% = Len(ltext) + 1
+		
+		ptext = Left$(ltext, p% - 1)
+		ltext = Mid$(ltext, p% + 2)
+		
+          ' check for centre/right justification
+		
+		p% = Instr(ptext, "~S")
+		
+		If p% > 0 Then
+			
+			Do While p% >0 
+				z% = p% + 2
+				Do While Mid$(ptext, z%, 1) = " "
+					z% = z% + 1
+				Loop
+				
+				y% = z% - Int(p%*2.4)
+				If y% < 1 Then y% = 1
+				
+				ptext = Left$(ptext, p% -1) & Space$(y%) & Mid$(ptext, z%)
+				p% = Instr(ptext, "~S")
+				
+			Loop
+			
+		Else
+			
+			Do While Len(ptext) > twidth
+				
+                    ' split text on nearest space in relation to page width
+				
+				If Mid$(ptext, twidth + 1, 1) = " " Then 
+					mtext = Left$(ptext, twidth + 1)
+					ptext = Mid$(ptext, twidth + 2)     
+					
+				Elseif Mid$(ptext, twidth, 1) = " " Then
+					mtext = Left$(ptext, twidth)
+					ptext = Mid$(ptext, twidth + 1)     
+				Else
+					s% = twidth
+					Do While Mid$(ptext, s%, 1) <> " " And s% >1 
+						s% = s% -1
+					Loop
+					
+					If s% < 2 Then 
+						mtext = Left$(ptext, twidth)
+						ptext = Mid$(ptext, twidth + 1)     
+					Else
+						mtext = Left$(ptext, s%)
+						ptext = Mid$(ptext, s%+1)
+					End If
+					
+				End If
+				
+				mtext = Trim(mtext)
+				ln% = ln% + 1
+				Redim Preserve letterlist(ln%)
+				letterlist(ln%) = mtext
+				
+			Loop
+		End If
+		
+          ' last bit of paragraph text
+		
+		ln% = ln% + 1
+		Redim Preserve letterlist(ln%)
+		letterlist(ln%) = ptext
+		
+	Loop
+	
+     ' assign formatted array to body2 field
+	
+	doc.body2 = letterlist
+	
+End Sub
+Sub getletter
+	
+     '****************************************************************************************
+	
+     'user selection of letter definition & parameters to use
+	
+     '****************************************************************************************
+	
+	Dim plist() As String
+	Dim explist() As String
+	Dim i As Integer
+	Dim k As Integer
+	Dim r As Integer
+	
+	status = 0
+	' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	
+	Set view = db.getview("letters")
+	If view Is Nothing Then
+		status = 1          
+		Beep
+		Messagebox "Error: Unable to locate letters view", 16,errorstub & errortext
+		Exit Sub
+	End If
+	
+	Set ldoc = view.getfirstdocument
+	If ldoc Is Nothing Then 
+		status = 1          
+		Beep
+		Messagebox "Error: No letters defined", 16, errorstub & errortext
+		Exit Sub
+	End If
+	
+	Redim plist(0)
+	Redim explist(0)
+	
+	i% = 0
+	k% = -1
+	Do While i% >= 0
+		i% = i% + 1
+		Set ldoc = view.getnthdocument(i%)
+		If ldoc Is Nothing Then 
+			i% = -1
+		Else
+			If (ldoc.lettertype(0) = "Non Case" And noncase = "y") _
+			Or (ldoc.lettertype(0) <> "Non Case" And noncase = "n") Then
+				k% = k% + 1                    
+				Redim Preserve plist(k%)
+				Redim Preserve explist(k%)
+				plist(k%) = ldoc.lettername(0)
+				explist(k%) = ldoc.setexpiryfield(0)
+			End If
+		End If
+	Loop       
+	
+	Set newdoc = db.createdocument
+	If dtype = "list" Then
+		newdoc.view = seldoc.parentview.name  ' the folder 
+	'	newdoc.view = seldoc.parentview.aliases(0) 
+	Else
+		newdoc.view = ""
+	End If
+	
+	newdoc.plist = plist
+	newdoc.explist = explist
+	
+	r% = ws.dialogbox("letterparam", True,True, False, False, False, False, _
+	"Set Letter Parameters to be Used", newdoc)   
+	
+	If Not r% Then
+		status = 1          
+		Exit Sub
+	End If
+	
+	letterdate = newdoc.letterdate(0)
+	expirydate = newdoc.expirydate(0)
+	runopt = newdoc.runopt(0)
+	nocopies = newdoc.nocopies(0)
+	testprint = newdoc.testprint(0)
+	If testprint = "y" Then 
+		nocopies = 1
+		runopt = "seldoc"
+	End If
+	
+     ' get letter document
+	Set view = db.getview("ltypelkup")
+	If view Is Nothing Then
+		status = 1          
+		Beep
+		Messagebox "Error: Unable to locate letters view", 16, errorstub & errortext
+		Exit Sub
+	End If
+	Set ldoc = view.getdocumentbykey(newdoc.slist(0), True)
+	If ldoc Is Nothing Then
+		status = 1          
+		Beep
+		Messagebox "Error: Unable to load template for letter: " & newdoc.slist(0), 16, errorstub & errortext
+		Exit Sub
+	End If
+	
+     ' get signatory
+	
+'	signatoryid = Left$(newdoc.signatory(0), Len(newdoc.signatory(0)) -2)    
+	signatory = Left$(newdoc.signatory(0), Len(newdoc.signatory(0)) -2)    
+	
+	
+'	Set sigdoc = db.getdocumentbyunid(signatoryid)
+'	If sigdoc Is Nothing Then
+'		status = 1          
+'		Beep
+'		Messagebox "Error: Unable to load signatory details (ID: " & signatoryid & ")", 16, "Error"
+'		Exit Sub
+'	End If
+	
+	Set sigdoc = sigvw.getdocumentbykey(signatory, True)
+	If sigdoc Is Nothing Then
+		status = 1          
+		Beep
+		Messagebox "Error: Unable to load staff document details for: " & signatory , 16, errorstub & errortext
+		Exit Sub
+	End If
+	
+	Set newdoc = Nothing  
+	
+End Sub

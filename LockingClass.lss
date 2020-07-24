@@ -1,0 +1,341 @@
+Option Public
+Option Declare
+Public Const LOCKSLNAME$ = "LockingClass"          ' THIS SCRIPT LIBRARY
+Public Const DBPROFILE$ = "dbprofile"                       ' DEFINE THE PARTICULAR PROFILE FORM IN USE FOR THE DB
+Public Const LOCKLOOKUPNSF$ = "lookup.nsf"       ' LOOKUP DATABASE PATH
+Public Const LOCKLOOKUPVIEWALIAS$ = "A1"         ' LOOKUP DATABASE LOOKUP KEY VIEW
+Public Const LOCKVIEW$ = "UNID"                               ' LOCK DB VIEW OF UNIDS
+Public Const LOCKFORM$ = "lock"                                ' THE FORM OF THE LOCKING DOCUMENTS DO NOT CHANGE THIS WITHOUT MAKING DESIGN CHANGES TO THE LOCKING DBS
+Public Const LOCKAUTHORSFIELD$ = "auth"            ' THE FIELD ON THE LOCK FORM THAT LETS ANYONE EDIT  DO NOT CHANGE THIS WITHOUT MAKING DESIGN CHANGES TO THE LOCKING DBS
+Public Const LOCKWILDCARD$ = "*"                            ' THE LOCKING DOCUMENT MUST BE EDITABLE BY ANYONE
+Public Const LOCKSEQNO$ = "seqno"                         ' THIS IS TO COPE WITH LOCKING AND REPLICATION CONFLICTS WHEN SET UP, USUALLY WE ONLY CARE ABOUT SAVE CONFLICTS
+
+Class locking 
+Public nsess As NotesSession
+Public ndb As NotesDatabase
+Public loccdb As NotesDatabase
+Public loccview As NotesView
+Public loccdc As NotesDocumentCollection
+Public loccprofiledoc As NotesDocument
+Public doctolock As NotesDocument       ' The document the user is working on that we need to test for existing locks and lock then release correctly
+Public loccdoc As NotesDocument
+Public loccitem As NotesItem
+Public loccnn As NotesName
+Public lockdbkey As String                        ' Usually "UNIDLOCK",  have it here if set in the profile otherwise use the constant above and delete this and amend the appropriate lines below
+Public lockserver As String                       ' SERVER THE LOCK DB IS ON ' IN A REPLICATED ENVIRONMENT YOU CANNOT USE THE LOCAL SERVER
+Public masterserver As String                  ' SERVER TO HOLD THE LOCKS ON
+Public lockpath As String                             ' PATH TO THE LOCK DB
+Public lockrepid As String                           ' NOT USED
+Public seqno As Integer
+
+Sub New
+		Set nsess = New NotesSession
+		Set ndb = nsess.currentdatabase
+
+		Set loccprofiledoc = ndb.Getprofiledocument(DBPROFILE$)
+		If loccprofiledoc Is Nothing Then
+			MessageBox "Unable to find the dbprofile " & DBPROFILE$ & ", exiting with errors",16,ndb.title & ". ONS Locking: Error with profile document"
+			Exit Sub
+		End If
+	' TAKE CARE WITH THE NEXT THREE LINES WHEN IMPLEMENTING IN A NEW DB 
+	MASTERSERVER = loccprofiledoc.masterserver(0)    ' RELIES ON THIS FIELD EXISTING ON THE DEFINED PROFILE
+	lockdbkey = loccprofiledoc.lockingkey(0)                         ' RELIES ON THIS FIELD EXISTING ON THE DEFINED PROFILE  IF YOU USE A PROFILE VALUE RATHER THAN CONSTANT
+	If MASTERSERVER = ""  Or lockdbkey = "" Then           ' TEST THIS APPROPRIATELY DEPENDING ON WHERE YOU HOLD LOCKDBKEY PROFILE OR CONSTANT 
+		MessageBox "dbprofile not correctly set up, exiting locking with errors",16,ndb.title & ". ONS Locking: Error with profile document"
+		Exit Sub
+	End If
+
+	If(ndb.Server <> "") Then
+		'	FIND LOCKSERVER AND PATH
+			Call findlockdb(LOCKPATH,LOCKSERVER, LOCKREPID,MASTERSERVER ,lockdbkey)
+			If LOCKPATH = "Not Found"  Then
+				MessageBox "dbprofile locking key not correctly set up, exiting locking with errors",16,ndb.title & ". ONS Locking: Error with profile document"
+				Exit Sub
+			End If
+			Set loccdb = New NotesDatabase( LOCKSERVER, LOCKPATH )
+		Else
+			MessageBox "I cannot lock this document so I presume that you are working disconnected from the network, it is OK to carry on editing but please bear in mind that if others edit this document before you replicate again a conflict may occur",_
+		64,  ndb.title & ". ONS Locking: Potential Replication/Save Conflict"
+		Exit Sub
+	End If
+
+	Set loccnn = New NotesName(nsess.username)
+
+End Sub
+
+Function findlockdb(path As String,server As String, repid As String, masterserver As String,key As String)
+	Dim lookupdb As New NotesDatabase(masterserver,LOCKLOOKUPNSF$)
+	Dim lookupview As NotesView
+	Dim lookupdoc As NotesDocument
+
+	Set lookupview = lookupdb.getview( LOCKLOOKUPVIEWALIAS$)
+	Set lookupdoc = lookupview.getdocumentbykey(key,True)
+	If(lookupdoc Is Nothing) Then
+		Print "Cannot locate " & key & " on the lookup database"
+		path = "Not Found"
+		Exit Function
+	End If
+
+	server = lookupdoc.target_server(0)
+	path = lookupdoc.path(0)
+	repid = lookupdoc.replicaid(0)
+End Function
+Function lockingengine(doctolock As NotesDocument,continue As Variant,runtype As Integer)
+	' A RATIONALISED VERSION OF THE ORIGINAL FINDLOCCDOC CODE WHICH WAS HARD TO FOLLOW DJS 05/02/2014	
+	'Runtype = 1 Just Find Lock
+	' Runtype = 2  Just Write lock
+	' Runtype = 3 Both
+	' Runtype = 4 Set the sequence no (only in querysave)
+	' Runtype = 5 Clear locks
+	' Runtype = 6 The same as 1 but do not display Messagebox messages or prints
+	' Runtype = 7 The same as 2 & 3  but do not display Messagebox messages or prints
+	' Runtype = 8 Clear locks without print
+	On Error GoTo errhandle
+
+	Dim docstate As Integer    ' 0 = NO DOC, 1 = DOC UNLOCKED
+	Dim runsilent As Integer    ' 0 = NORMAL OPERATION, 1 = NO MESSAGEBOXES 
+	
+	runsilent = 0
+	continue = True
+	If(doctolock.HasItem(LOCKSEQNO$)) Then  ' Do not implement sequence number unless we have to DJS 12/08/2005
+		seqno = doctolock.seqno(0)
+	End If
+	
+	Set loccview = loccdb.getview(LOCKVIEW$)
+
+	Select Case runtype
+			' Runtype 1 = Just Find Lock
+		Case 1 :		GoSub testlock    ' Note that testloc exits function if a lock exists
+			
+			' Runtype 2 = Test and Write lock - both 2 and 3 included for backward compatibility at least for now
+		Case 2, 3 :		GoSub testlock
+			If docstate = 0 Then       ' NO EXISTING LOCKING  DOC
+				GoSub nolockdoc 
+			End If
+			GoSub writeloc
+			
+			' Runtype = 4 Set the sequence no (only in querysave)
+		Case 4 :		GoSub sequence
+			GoSub writeloc
+			
+			' Runtype = 5 Clear locks		
+		Case 5 : 	GoSub clearlocs
+			
+			' Runtype = 6 The same as 1 (Find Lock) but Do not display Messagebox messages 
+		Case 6 :		runsilent = 1
+			GoSub testlock
+			
+			' Runtype = 7 The same as 2 & 3 (Find and write Lock) but Do not display Messagebox messages 
+		Case 7 :		runsilent = 1
+			GoSub testlock
+			If docstate = 0 Then       ' NO EXISTING LOCKING  DOC
+				GoSub nolockdoc 
+			End If
+			GoSub writeloc
+			
+			' Runtype = 8 Clear locks silently		
+		Case 8 :    runsilent = 1 	
+		GoSub clearlocs
+			
+	End Select
+		
+	Exit Function
+	
+	' TRY TO FIND AN EXISTING LOCKING DOCUMENT AND LOCK MARKER (IF DOC EXISTS)
+testlock:
+	Call loccview.refresh
+	Set loccdoc = loccview.getdocumentbykey(doctolock.UniversalID)   ' LOOK FOR THE LOCKING DOC
+	If Not (loccdoc Is Nothing) Then                     'lockdoc exists
+		If(loccdoc.lockedby(0) <> "") Then            'Is someone editing ?
+			If (runsilent = 0) Then 
+				MessageBox "Document locked by " + loccdoc.lockedby(0) + " since " + CStr(loccdoc.datetime(0)),16,ndb.title & ". ONS Locking: Document Is Being Edited"
+			End If
+			continue = False
+			Exit Function  ' THIS IS WHERE WE EXIT FALSE INDICATING A LOCK ALREADY EXISTS
+		Else  ' NO LOCK HELD
+			docstate = 1  ' LOCKING DOC EXISTS  UNLOCKED
+		End If
+	Else
+		docstate =  0     ' NO EXISTING LOCKING  DOC
+	End If
+	Return
+	
+	'LOCKDOC IS NOTHING - I.E. document has not been previously locked
+nolockdoc:    
+	Set loccdoc = New NotesDocument(loccdb)
+	loccdoc.form = LOCKFORM$
+	loccdoc.unid = doctolock.UniversalID
+	loccdoc.lockedapp = ndb.Title
+	Return
+
+	' WRITE A LOCK - EITHER A NEW DOC OR SET THE LOCKEDBY ON EXISTING
+writeloc:
+	Dim dt As New NotesDateTime( "" )
+	loccdoc.lockedby = loccnn.abbreviated
+	Set loccitem = loccdoc.ReplaceItemValue(LOCKAUTHORSFIELD$, LOCKWILDCARD$ )
+	loccitem.IsAuthors = True
+	Call dt.SetNow
+	loccdoc.datetime = dt.lslocaltime
+	If (runsilent = 0) Then 
+		Print ndb.title & " Document Locked"
+	End If
+	' ONLY SET SEQNO IF DOC IS SAVED
+	If(runtype = 4) Then
+		seqno = seqno + 1   ' INCREMENT SEQNO TO INDICATE EDITED
+		loccdoc.seqno = seqno
+		doctolock.seqno = seqno         ' SET DATABASE DOC TO SAME SEQNO
+	End If
+
+	Call loccdoc.save(True, True)
+	Return
+
+clearlocs:
+	On Error Resume Next    ' For use on laptops etc
+	Set loccview = loccdb.getview(LOCKVIEW$)
+	Call loccview.refresh
+	Set loccdc = loccview.getalldocumentsbykey(doctolock.UniversalID)   ' Sometimes multiples are created
+	If  (loccdc.count > 0) Then
+		Set loccdoc = loccdc.getfirstdocument
+		While Not loccdoc Is Nothing               ' CLEAR ALL LOCKS JUST IN CASE
+			loccdoc.lockedby = ""
+			loccdoc.save True,True
+			Set loccdoc = loccdc.getnextdocument(loccdoc)
+		Wend
+		If (runsilent = 0) Then 
+			Print ndb.title & " Document Unlocked"
+		End if
+	End If
+	Return
+	
+sequence:
+	If(loccdoc.HasItem(LOCKSEQNO$) And doctolock.HasItem(LOCKSEQNO$)) Then             ' Seqno wont be there necessarily
+		If(loccdoc.seqno(0) <> seqno) Then            'Is the sequence number correct ?
+			MessageBox "Document has been edited on another replica at " + CStr(loccdoc.datetime(0)) + " Please try later",16,ndb.title & ". ONS Locking: Potential Replication Conflict Detected"
+			continue = False
+			Exit Function
+		End If
+	End If
+	Return	
+
+errhandle:
+' I had to add 2 to the error line number as for some odd reason presumably to do with classes, it doesn't count the lines containing option public and option declare
+	Print ndb.title & ": Error number " & CStr(Err) & ": " & Error & ": Line number " & CStr(Erl + 2)  & " in sub/function " & LSI_Info(2) & ": Called by sub/function " & LSI_Info(12) & " in Script Library " & LOCKSLNAME$ 
+End Function
+
+Function quo(Source As NotesUIDocument, Mode As Integer, Isnewdoc As Variant, Continue As Variant)
+	On Error Resume Next    ' For use on laptops etc
+	If Not source.isnewdoc Then
+		If(source.EditMode) Then
+			If (loccdb.title = "") Then
+				Exit Function
+			End If
+			' IF DOC STRAIGHT INTO EDIT MODE THEN CHECK FOR LOCK AND WRITE LOCK.
+			Set doctolock = source.document
+			Call  lockingengine(doctolock,continue,3)
+		End If
+	End If
+End Function
+
+Function qmc(Source As NotesUIDocument, Continue As Variant)
+	On Error Resume Next    ' For use on laptops etc
+	If (loccdb.title = "") Then
+		Exit Function
+	End If
+	If Not source.isnewdoc Then
+' JUST CHECK FOR LOCK AND SEQUENCE NO
+		Set doctolock = source.document
+		Call lockingengine(doctolock,continue,1)
+	End If
+End Function
+
+Function pmc(Source As NotesUIDocument)
+	On Error Resume Next    ' For use on laptops etc
+	Dim continue As Variant
+	If Not source.isnewdoc Then
+			If (loccdb.title = "") Then
+				Exit Function
+			End If
+			' QUERYMODECHANGE WAS OK SO WRITE LOCK
+			Set doctolock = source.document
+			Call lockingengine(doctolock,continue,2)
+		End If
+End Function
+
+Function qus(Source As NotesUIDocument, Continue As Variant)
+	On Error Resume Next    ' For use on laptops etc
+	Set doctolock = source.document
+	If source.isnewdoc Then
+		If (loccdb.title = "") Then
+			Exit Function
+		End If
+' FOR NEW DOC WRITE A LOCK DOC
+		Call  lockingengine(doctolock,continue,2)
+	Else
+' FOR EXISTING DOC SET THE SEQUENCE NUMBER
+		Call  lockingengine(doctolock,continue,4)
+	End If
+End Function
+
+Function quc(Source As NotesUIDocument, Continue As Variant)
+	On Error Resume Next    ' For use on laptops etc
+	If  ( source.EditMode ) Then
+		If Not source.isnewdoc Then
+			If (loccdb.title = "") Then
+				Exit Function
+			End If
+			Set doctolock = source.document
+			Call lockingengine(doctolock,continue,5)   ' CLEAR LOCKS			
+		End If
+	End If
+End Function
+
+Function agentlock(doctolock As NotesDocument,continue As Variant)
+	Call lockingengine(doctolock,continue,7)
+End Function
+
+Function agentunlock(doctounlock As NotesDocument,continue As Variant)
+	Call lockingengine(doctounlock,continue,8)
+End Function
+
+End Class
+Sub Terminate
+End Sub
+Sub Instructions_Read_Me_First
+	%REM
+	Library LockingClass
+	Created Dec 9, 2014 and updated including creating this template 02/03/2016 by Dominic Shields
+	Description: The ONS simple locking that uses locking documents in lookup.nsf or lock databases such as CCLocks rewritten more logically - to use this
+	0. Copy this script library into your database design then integrate as outlined in the following steps.
+	1. Decide whether you want to hold the locking database lookup key lockdbkey as a Constant or in the database profile - in the default code here it is in the profile "dbprofile"
+	The constant would look like     Public Const LOCKDBKEY$ = "UNIDLOCK"   ' LOOKUP KEY FOR DATABASE WHERE LOCKS HELD
+	2. You need a way of setting a master server - the code in this script library uses a field "masterserver" on the profile "dbprofile"
+	3. In the form that will be locked you need the code
+	Globals <Options>
+	Use "LockingClass"
+	Globals <Declarations>
+	Dim onslock As locking
+	Globals <initialize>
+	Set onslock = New locking
+	Queryopen
+	Call onslock.quo(Source, Mode, isnewdoc, Continue)
+	Querymodechange
+	Call  onslock.qmc(source,continue)
+	Postmodechange
+	Call onslock.pmc(source)
+	Querysave
+	Call onslock.qus(source,continue)
+	Queryclose
+	Call onslock.quc(source,continue)
+	4. If you are having to deal with replication conflicts too, the form will need a numeric hidden field called "seqno" - speak to me Dom about this
+	5. For completeness, the external database that holds the locks must have a view identical to the view "UNID" held in this reference design, it doesn't have to be called UNID, this is set 
+	by the constant Public Const LOCKVIEW$ = "UNID". The database this lives in must be default access Author with create and have a lookup.nsf "A1" view lookup key which you
+	configure in the code by use of the Constant or profile field explained in step 1 above. The Lookup.nsf design has this view and form already and is a good choice to use, don't create
+	lock databases unnecessarily, many can use the one database - currently this has the A1 view key "GENERICLOCK"
+	This database also needs a form called "lock" included in this design and a scheduled agent that removes the persistent locks overnight also included. 
+	The locking documents by design do not get deleted when a lock is released, there are two reasons for this: 
+	An efficiency issue as the same documents tend to get edited many times in a day - much less resources to update a field than create/delete docs.
+	We don't want to give people ACL delete access to the locking database in case they get creative.
+	6. The functions (methods) agentlock and agentunlock are for use in agents and actions where the agent or action are updating documents that may possibly be locked but we do not 
+	want any front-end messages. The calling code must report on what it was unable to update in logs or similar for action by the developer.  	
+	%END REM
+End Sub

@@ -1,0 +1,1128 @@
+Option Public
+Option Declare
+
+Dim ws As notesuiworkspace
+Dim session As notessession
+
+Dim db As notesdatabase
+Dim dc As notesdocumentcollection
+
+Dim view As notesview
+
+Dim seldoc As notesdocument
+Dim cdoc As notesdocument
+Dim prdoc As notesdocument
+Dim printerdoc As notesdocument
+
+Dim uidoc As notesuidocument
+
+' error code
+
+Dim status As Integer
+
+' list of document ids
+
+Dim ids() As String 
+
+' document counters
+
+Dim docidno As Integer
+Dim numdocs As Integer
+
+' contrbutor contact & address  (arrays)
+
+Dim cname As Variant    '  DJS 09/08/2012
+Dim caddress  As Variant
+Dim contact As Variant
+Dim forname As Variant
+Dim foraddr As Variant
+Dim forflag As String
+
+' general text handling 
+
+Dim ltext As String
+Dim mtext As String
+Dim ptext As String
+
+' label parameters
+
+Dim runopt As String
+Dim duplicatelabels As String
+Dim labeltype As String
+Dim labelno As String
+Dim xcoord() As Long
+Dim ycoord() As Long
+Dim yinc As Long
+
+Dim labelnum As Integer
+Dim maxlabelnum As Integer
+Dim labeldepth As Long
+Dim lxcoord As Long
+Dim lycoord As Long
+
+' Print parameters 
+
+Dim envorlab As String
+Dim caseornon As String
+
+Dim filenum As Integer
+Dim fname As String
+Dim printer As String
+Dim testprint As String
+Dim dtype As String
+
+Dim orient As String
+Dim pointsize As Integer
+Dim maxpointsize As Integer
+Dim tray As String
+Dim trayint As String  ' String deliberately - its just a naming convention DJS 25/02/2014
+Dim paper As String
+Dim mfont As String
+
+Dim pageeject As String
+Dim prinit As String     
+Dim printerreset As String
+
+Dim errorstub As String
+Dim errortext As String
+
+
+
+Sub Initialize
+	Set ws = New notesuiworkspace
+	Set session = New  notessession
+	Set db = session.currentdatabase
+	errorstub = db.Title & ". Script Library: labels&envelopes. Sub/function "	
+End Sub
+Sub openprint
+	
+     '***************************************************************
+	
+     ' open print file     
+	
+     '***************************************************************
+	
+	status = 0
+	
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	
+'	fname = "c:\temp\labelprint.txt"   CAUSING PROBLEMS PRESUMABLY DUE TO PERMISSIONS DJS 16/10/2012
+'	fname = "h:\ndata\labelprint.txt"  CAUSING PROBLEMS DUE TO NDATA NOT EXISTING  DJS 21/03/2013
+	
+	fname=Environ("Temp")   '  ADDED DJS 21/03/2013
+	If fname="" Then
+		fname=Environ("Tmp")
+		If fname=""  Then
+			Messagebox "No 'TEMP' directory in your environment", 16, errorstub & errortext
+			Exit Sub
+		End If
+	End If
+	fname = fname & "\labelprint.txt" 	
+	Print fname
+	
+	ltext = Dir$(fname)
+	If ltext <> "" Then
+		Kill fname
+	End If
+	fileNum = Freefile()
+	Open fname For Output As filenum 
+	
+	Print #fileNum, prinit
+	
+End Sub
+Sub getprinter
+	
+     '************************************************************************
+	
+     ' lookup label/envelope printer details
+	
+     '***********************************************************************
+	
+	Dim papersize As String
+	Dim traynum As String
+	Dim ds As String
+	Dim duplex As String
+	
+	status = 0
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	
+	Set view = db.getview("printers")
+	If view Is Nothing Then
+		Beep
+		Msgbox "Error: Unable to access view 'printers'", 16, errorstub & errortext
+		status = 1
+		Exit Sub
+	End If
+	
+	Set printerdoc = view.getfirstdocument
+	If printerdoc Is Nothing Then 
+		Beep
+		Msgbox "Error: Unable to access printers document", 16, errorstub & errortext
+		status = 1
+		Exit Sub
+	End If
+	
+	If envorlab = "rd" Then
+		printer = printerdoc.rdlabelprinter(0)
+		tray = printerdoc.rdlabeltraynum(0)
+		trayint = printerdoc.rdlabeltrayint(0)   ' Newly calculated on the printer config doc DJS 25/02/2014
+		paper = printerdoc.rdlabelpaper(0)
+		orient = "0"
+	Elseif envorlab = "form" Then
+		printer = printerdoc.labelprinter(0)
+		tray = printerdoc.labeltraynum(0)
+		trayint = printerdoc.labeltrayint(0)   ' Newly calculated on the printer config doc DJS 25/02/2014
+		paper = printerdoc.labelpaper(0)
+		orient = "0"
+	Elseif envorlab = "largeenv" Then
+		printer = printerdoc.largeenvelopeprinter(0)
+		tray = printerdoc.largeenvelopetraynum(0)
+		trayint = printerdoc.largeenvelopetrayint(0)   ' Newly calculated on the printer config doc DJS 25/02/2014
+		paper = printerdoc.largeenvelopepaper(0)
+		orient = "1"
+	Elseif envorlab = "smallenv" Then
+		printer = printerdoc.smallenvelopeprinter(0)
+		tray = printerdoc.smallenvelopetraynum(0)
+		trayint = printerdoc.smallenvelopetrayint(0)   ' Newly calculated on the printer config doc DJS 25/02/2014
+		paper = printerdoc.smallenvelopepaper(0)
+		orient = "1"
+	Elseif envorlab = "postfenv" Then
+		printer = printerdoc.largeenvelopeprinter(0)
+		tray = printerdoc.largeenvelopetraynum(0)
+		trayint = printerdoc.largeenvelopetrayint(0)   ' Newly calculated on the printer config doc DJS 25/02/2014
+		paper = printerdoc.largeenvelopepaper(0)
+		orient = "1"
+	End If
+	
+     ' get/set print parameters
+	
+	paper = Lcase(paper)
+	tray = Lcase(tray)
+	duplex = "n"
+	
+	%REM
+     	LEXMARK PRINTER MANUAL
+    	Use the following integers to set the paper tray:
+		0 Tray 1
+		1 Tray 2
+		2 Multipurpose Feeder or Envelope Feeder
+		3 Manual Paper
+		4 Manual Envelope
+		5 Tray 3
+		7 Multipurpose Feeder
+		8 Tray 4
+		9 Tray 5
+		Notes:
+		• If the Manual Paper or Manual Envelope source is selected, the Manual-
+		Feed page device parameter is set to true. 
+	%END REM
+	
+	' NEW CODE WHERE THE CONVERSION IS DONE ON THE PRINTER CONFIG DOC DJS 25/02/2014 
+
+	traynum = trayint   'DJS 25/02/2014 
+
+%REM
+	ORIGINAL CODE WHICH SEEMED TO WORK FINE FOR NON-LEXMARK PRINTERS, AS THIS STOPPED WORKING CORRECTLY
+	ONCE WE HAD LEXMARK PRINTERS AND THIS CONVERSION MAY CHANGE AGAIN, I PUT ALL THE CONVERSION STUFF 
+	ON THE PRINTER CONFIG DOC - DJS 25/02/2014 	
+     ' set paper parameters
+	
+	Select Case tray
+	Case "1"
+		traynum = "8"
+		
+	Case "2"
+		traynum = "1"
+		
+	Case "3"
+		traynum = "4"
+		
+	Case "4"
+		traynum = "5"
+		
+	Case "envelope feeder"
+		traynum = "6"
+		
+	Case Else
+		Beep
+		Messagebox "Invalid tray no: " & tray & _
+		"Please inform support", 16, errorstub & errortext
+		status = 1
+		Exit Sub
+		
+	End Select
+%END REM
+	
+	Select Case Lcase(paper)
+	Case "a3"
+		papersize = "27"
+		
+	Case "a4"
+		papersize = "26"
+		
+	Case "monarch"
+		papersize = "80"
+		
+	Case "com 10"
+		papersize = "81"
+		
+	Case "dl"
+		papersize = "90"
+		
+	Case "c5"
+		papersize = "91"
+		
+	Case "other"
+		papersize = ""
+		
+	Case Else
+		Beep
+		Messagebox "Invalid paper size: " & paper & _
+		"Please inform support", 16, errorstub & errortext
+		status = 1
+		Exit Sub
+		
+	End Select
+	
+	printerreset = Chr$(27) & "E"
+	
+     ' set up  printer initialisation    
+	
+	prinit = _
+	Chr$(27) & "%-12345X@PJL SET PAGEPROTECT=OFF" & Chr$(10) &_
+	"@PJL SET RESOLUTION=600" & Chr$(10) & _
+	"@PJL ENTER LANGUAGE=PCL" & Chr$(13) & Chr$(10) & _
+	Chr$(27) & "E" & _
+	Chr$(27) & "*t600R" & _
+	Chr$(27) & "&u600D" & _
+	Chr$(27) & "*r0F" & _
+	Chr$(27) & "&l" & orient & "O" & _
+	Chr$(27) & "&l" & traynum & "H" 
+	
+	If papersize = "" Then
+		prinit = prinit & Chr$(27) & "&l8c1E" 
+	Else
+		prinit = prinit & Chr$(27) & "&l"  & papersize & "a8c1E"
+	End If
+	
+	prinit = prinit & _
+	Chr$(27) & "*p0x0Y" & _
+	Chr$(27) & "*c0t5594x8201Y" & _
+	Chr$(27) & "&l1X" & _
+	Chr$(27) & "*b0M" & _
+	Chr$(27) & "(10U" 
+	
+End Sub
+Sub printcurdoc()
+	
+     '************************************************************************
+     '
+     '  print the label/envelope of currrent document id
+     '  
+	' Changed to allow a 950 Enforcement Name and address to be printed DJS 09/08/2012
+     '************************************************************************
+	
+	Dim naddln As Integer
+	Dim nspln As Integer
+	Dim na As Integer
+	Dim a As Integer
+	Dim b As Integer
+	Dim i As Integer
+	Dim j As Integer
+	Dim k As Integer
+	Dim p As Integer
+	Dim ncaddress As String
+	Dim nccontact As String
+	
+	status = 0
+	forflag = "no"
+	
+	Set cdoc=seldoc   ' WE ALWAYS WANT THE SELDOC DJS 11/12/2012
+	
+	If caseornon = "non" Then
+		
+'		Set cdoc=seldoc   ' MOVED UP OUTSIDE THE IF AS WE ALWAYS WANT THE SELDOC DJS 11/12/2012
+		
+		cname = cdoc.name                       'DJS 09/08/2012
+		
+		na% = -1
+		Redim caddress(0)
+		ncaddress =   seldoc.address(0)        
+		p% = Instr(ncaddress, Chr$(13))
+		Do While p% > 0
+			na% = na% + 1
+			Redim Preserve caddress(na%)
+			caddress(na%) = Left$(ncaddress, p% -1)
+			ncaddress = Mid$(ncaddress, p% +2)
+			p% = Instr(ncaddress, Chr$(13))
+		Loop
+		na% = na% + 1
+		Redim Preserve caddress(na%)
+		caddress(na%) = ncaddress
+		
+		na% = -1
+		Redim contact(0)
+		nccontact =   seldoc.contact(0)        
+		p% = Instr(nccontact, Chr$(13))
+		Do While p% > 0
+			na% = na% + 1
+			Redim Preserve contact(na%)
+			contact(na%) = Left$(nccontact, p% -1)
+			nccontact = Mid$(nccontact, p% +2)
+			p% = Instr(nccontact, Chr$(13))
+		Loop
+		na% = na% + 1
+		Redim Preserve contact(na%)
+		contact(na%) = nccontact
+		
+	Else
+' Debbie found that registered address wasn't being used in preference to the for address for envelopes so
+' this change tests to see if a registered office exists and uses this if it does. DJS 26/07/2012	
+		If (cdoc.regoffice(0) <> "") Then          ' DJS 26/07/2012	
+			cname = cdoc.regname                 'DJS 09/08/2012
+			caddress = cdoc.regoffice               ' DJS 26/07/2012	
+		Else
+			cname = cdoc.name                       'DJS 09/08/2012
+			caddress = cdoc.address                ' DJS 26/07/2012	
+		End If
+		
+		If envorlab = "postfenv" Then
+			contact = cdoc.named_contact
+		Else
+			contact = cdoc.contact
+		End If
+		
+		If envorlab = "form" Then
+' TRYING TO GET THE TWO ADDRESSES ON THE LABELS 
+' A ROUGH AND READY HACK			                                       DJS 01/08/2012
+'			If cdoc.for1_address(0) <> "" Then                             '  DJS 01/08/2012
+			If (cdoc.regoffice(0) <> "") Then                            ' DO THE OPPOSITE OF ABOVE '  DJS 01/08/2012
+				forflag = "yes"
+				forname = "For:  "
+'				forname = forname & cdoc.for1_name(0)        '  DJS 01/08/2012
+				forname = forname & cdoc.name(0)                 '  DJS 01/08/2012
+'				foraddr = cdoc.for1_address                               '  DJS 01/08/2012
+				foraddr = cdoc.address                                        '  DJS 01/08/2012
+			End If
+		End If 
+	End If
+	
+   ' calculate pointsize for no of address lines
+	
+	If forflag = "yes" Then
+		naddln = 3 + Ubound(caddress) + Ubound(contact) + 1 + Ubound(foraddr)
+	Else
+		naddln = 3 + Ubound(caddress) + Ubound(contact) 
+	End If
+	
+	yinc = labeldepth/naddln
+	pointsize = yinc*72/600 -2
+	
+     ' set max point size to 11
+	
+	If pointsize > maxpointsize Then pointsize = maxpointsize
+	yinc = (pointsize +2)*600/72
+	
+     ' calculate no of blank lines to centre address in available label/envelope space
+	
+	nspln = ((labeldepth -  (yinc * naddln))/yinc)/2
+	If nspln < 0 Then nspln = 0
+	
+     ' select font
+	
+	mfont = Chr$(27) & "(s1p" & pointsize & "v0s0b4101T"
+	Print #filenum, mfont
+	
+     ' print label./envelope
+	
+	If duplicatelabels = "Yes" Then 
+		k% = 2
+	Else
+		k% = 1
+	End If
+	
+	For j% = 1 To k% 
+		
+		labelnum = labelnum + 1
+		If labelnum > maxlabelnum Then
+			Print #filenum, Chr$(12)
+			labelnum = 0
+		End If
+		
+          ' set X, Y coords for margins etc
+		
+		lxcoord = xcoord(labelnum) 
+		lycoord = ycoord(labelnum) + yinc * nspln
+		
+		For i% = 0 To Ubound(contact)
+			Print #filenum, Chr$(27) & "*p" & lxcoord & "x"  & lycoord & "Y" & _
+			contact(i%) 
+			lycoord = lycoord + yinc
+		Next
+		
+		Print #filenum, Chr$(27) & "*p" & lxcoord & "x" & lycoord & "Y" & _
+		cname(0)                        'DJS 09/08/2012
+'		cdoc.name(0)            'DJS 09/08/2012   
+		
+          ' insert address lines
+		
+		For a% = 0 To Ubound(caddress)
+			lycoord = lycoord + yinc
+			Print #filenum, Chr$(27) & "*p" & lxcoord & "x" & lycoord & "Y" & _
+			caddress(a%)
+		Next    
+		
+		lxcoord = lxcoord + 50
+		
+		
+		If forflag = "yes" Then
+			lycoord = lycoord + yinc
+			Print #filenum, Chr$(27) & "*p" & lxcoord & "x" & lycoord & "Y" & _
+			forname 
+			For b% = 0 To Ubound(foraddr)
+				lycoord = lycoord + yinc
+				Print #filenum, Chr$(27) & "*p" & lxcoord & "x" & lycoord & "Y" & _
+				foraddr(b%)
+			Next
+		End If
+	Next
+	
+End Sub
+Sub getprofiledoc
+	
+     '********************************************************************
+	
+     ' get profile docuement & disable deselect agent
+	
+     '********************************************************************
+	
+	status = 0
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	
+	Set prdoc = db.getprofiledocument("dbprofile")
+	If prdoc Is Nothing Then
+		Beep
+		status = 1
+		Msgbox "Error: Unable to access dbprofile document", 16, errorstub & errortext
+		Exit Sub
+	End If
+	
+	prdoc.deselect = "n"
+	
+End Sub
+Sub printdoclist(envorlabparam As String, caseornoncase As String)
+	
+     ' **********************************************************************************************
+     '
+     ' Main Entry Point
+     '
+     ' print labels/envelopes for list of case documents selected by user
+     '
+     ' parameters
+	
+      '    envorlab:
+     '                   largeenv  = large envelope
+     '                   smallenv  = small envelope
+     '                   form  = form address label
+     '                   rd     = recorded delivery labels
+     '
+     '   caseornoncase:
+     '                   case = print for case documents
+     '                   non   = print for non case letters
+     '
+     '***********************************************************************************************
+	
+'	Set ws = New notesuiworkspace
+'	Set session = New  notessession
+'	Set db = session.currentdatabase
+	Dim m2 As Integer
+	Dim nlc As Integer
+	Dim i As Integer
+	Dim l As Integer
+	Dim r As Integer
+	Dim x As Integer
+	Dim inquiry_code As String
+	Dim period As String
+	
+	status = 0
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	
+	dtype = "list"
+	envorlab = Lcase(envorlabparam)
+	caseornon = caseornoncase
+	
+     ' get profile document to set deselect agent flag
+	
+	Call getprofiledoc()
+	If status <> 0 Then Exit Sub
+	
+     ' get 1st selected  document ( required for parent view options)
+	
+	Set dc = db.unprocesseddocuments
+	If dc.count = 0 Then
+		Beep
+		If caseornon = "case" Then
+			Msgbox "Error: A case details document must be selected first", 16, errorstub & errortext
+		Else
+			Msgbox "Error: A non case letter document must be selected first", 16, errorstub & errortext
+		End If
+		status = 1         
+		Exit Sub
+	End If
+	
+	Set seldoc = dc.getfirstdocument     
+	
+     ' get run parameters 
+	
+	Call getparams() 
+	If status <> 0 Then Exit Sub
+	
+     ' get ids of selected documents or documents for all inquiry
+	
+	Redim ids(0)
+	m2% = 0
+	
+	If runopt = "seldoc" Then
+		
+          ' selected documents
+		
+		nlc% = -1
+		For i% = 1 To dc.count
+			Set seldoc = dc.getnthdocument(i%)
+'			If seldoc.form(0) = "livecasedetails" _    
+			If seldoc.form(0) = "enforcement" _                   ' DJS 20/03/2012
+			Or seldoc.form(0) = "noncaseletter" Then
+				nlc% = nlc% + 1               
+				Redim Preserve ids(nlc%)
+				ids(nlc%) = seldoc.universalid
+			End If 
+		Next
+		
+		If nlc% = -1 Then
+			Beep
+			If caseornon = "case" Then
+				Msgbox "Error: No case details documents have been selected ", 16, errorstub & errortext
+			Else                    
+				Msgbox "Error: No case details documents have been selected ", 16, errorstub & errortext
+			End If
+			status = 1         
+			Exit Sub
+		End If
+		
+		If nlc% <> dc.count-1 Then
+			m2% = 1
+		End If
+		
+	Else
+		
+         ' all non excluded case documents for inquiry 
+         ' find 1st case document for inquiry & period
+		
+		nlc% = -1
+		For i% = 1 To dc.count
+			Set seldoc = dc.getnthdocument(i%)
+'			If seldoc.form(0) = "livecasedetails" Then                  ' DJS 20/03/2012
+			If seldoc.form(0) = "enforcement" Then
+				nlc% = nlc% + 1               
+				i% = dc.count +1
+			End If 
+		Next
+		
+		If nlc% = -1 Then
+			Beep
+			Msgbox "Error: A case detail document for the required inquiy/period must be selected ", 16, errorstub & errortext
+			status = 1         
+			Exit Sub
+		End If
+		
+		inquiry_code = seldoc.inquiry_code(0)
+		period = seldoc.period(0)
+		
+          ' get confirmation 
+		
+		r% = Msgbox("Print Labels/Envelopes for inquiry: " & inquiry_code  & Chr(13) & _
+		"Period: " & period & "?" & Chr$(13) & _
+		"Click on OK to confirm", 1+32, errorstub & errortext)
+		
+		If r% = 2 Then Exit Sub
+		
+          ' get 1st document for inquiry & period in the view
+		
+		Redim ka(1)
+		ka(0) = inquiry_code
+		ka(1) = period
+		If Instr(period,"/") > 0 Then
+			ka(1) = Right(period, 4) & Left(period, 1)
+		End If
+		
+'		Set view = db.getview("lcbi")            ' DJS 20/03/2012
+		Set view = db.getview("E2")            ' DJS 20/03/2012
+		If view Is Nothing Then
+			status = 1
+			Beep
+			Msgbox "Error: Unable to locate view ""E2""", 16, errorstub & errortext
+			Exit Sub
+		End If
+		
+		Set seldoc = view.getdocumentbykey(ka, True)
+		If seldoc Is Nothing Then
+			status = 1
+			Beep
+			Msgbox "Error: Unable to locate case document for inquiry:" & inquiry_code & Chr$(13) & _
+			"Period: " & period, 16, errorstub & errortext
+			Exit Sub
+		End If
+		
+          ' get rest of case documents for inquiry/period
+		
+		nlc% = -1
+		x% = 0
+		Do While  x% = 0 
+			If seldoc.inquiry_code(0) <> inquiry_code Or seldoc.period(0) <> period Then
+				x% = -1
+			Else
+				If Not(Isnumeric(seldoc.exclude(0))) Then seldoc.exclude = 0
+				
+'				If seldoc.form(0) = "livecasedetails"  And seldoc.exclude(0) = 0 Then   ' DJS 20/03/2012
+				If seldoc.form(0) = "enforcement"  And seldoc.exclude(0) = 0 Then   ' DJS 20/03/2012
+					nlc% = nlc% + 1               
+					Redim Preserve ids(nlc%)
+					ids(nlc%) = seldoc.universalid
+				End If 
+				
+				Set seldoc = view.getnextdocument(seldoc)
+				If seldoc Is Nothing Then
+					x% = -1
+				End If
+			End If
+		Loop
+		
+          ' Error if none found
+		
+		If nlc% = -1 Then
+			Beep
+			Msgbox "Error: No relevant case details documents found for Inquiry: " & seldoc.inquiry_title(0) & Chr$(13) & _
+			"Period: " & period, 16, errorstub & errortext
+			status = 1         
+			Exit Sub
+		End If
+		
+	End If
+	
+     ' Print labels/envelopes
+	
+	Call printlabels()
+	If status <> 0 Then Exit Sub
+	
+     ' enable deselect agent
+	
+	prdoc.deselect = "y"
+	
+	Beep
+	
+	If envorlab = "form" Or envorlab = "rd" Then
+		If m2% = 0 Then
+			Msgbox "Label(s) printed successfully", 64, errorstub & errortext
+		Else
+			Msgbox "Label(s) printed successfully" &  Chr$(13) & _ 
+			"Some non-case details documents were selected and were ignored", 48, errorstub & errortext
+		End If          
+	Else
+		If m2% = 0 Then
+			Msgbox "Envelope(s) printed successfully", 64, errorstub & errortext
+		Else
+			If caseornon = "case" Then
+				Msgbox "Envelope(s) printed successfully" & Chr$(13) & _
+				"Some non-case details documents were selected and were ignored", 48, errorstub & errortext
+			Else
+				Msgbox "Envelope(s) printed successfully" & Chr$(13) & _
+				"Some documents other than letters were selected and were ignored", 48, errorstub & errortext
+			End If
+		End If
+	End If
+	
+End Sub
+Sub getdetails
+	
+     '************************************************************************************************
+     '
+     ' get  contributor document 
+     ' for associated case document
+	
+     '************************************************************************************************
+	
+	status = 0
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	
+'	Set view = db.getview("contriblkup")
+	Set view = db.getview("E1")    ' DJS 20/03/2012
+	If view Is Nothing Then
+		status = 1
+		Beep
+		Msgbox "Error: Unable to locate contributor view ""contriblkup""", 16, errorstub & errortext
+		Exit Sub
+	End If
+	
+	Set cdoc = view.getdocumentbykey(seldoc.reference, True)
+	
+	If cdoc Is Nothing Then
+		status = 1
+		Beep
+		Msgbox "Error: Could not locate contributor details for reference:" & seldoc.reference(0), 16, errorstub & errortext
+		Exit Sub
+	End If
+	
+End Sub
+Sub printlabels()
+	
+     '******************************************************************************************
+     '
+     ' printlabels
+     '
+     ' print labels/envelopes for all docs whose uids are in ids()
+     '
+     '******************************************************************************************
+	
+	status = 0
+	labelnum = Cint(labelno) -2
+	
+     ' lookup printer details
+	
+	Call getprinter()
+	If status <> 0 Then Exit Sub
+	
+     ' open output file & initialise printer
+	
+	Call openprint()
+	If status <> 0 Then Exit Sub
+	
+     ' loop through all case document ids
+	
+	numdocs = Ubound(ids)
+	For docidno = 0 To numdocs
+		
+          ' get next case document
+		
+		Call getnextdoc()
+		If status <> 0 Then 
+			Close #filenum               
+			Exit Sub
+		End If
+		
+%REM		THIS CALL IS NOW OBSOLETE AS THERE ARE NO SEPARATE CONTIBUTOR DOCS DJS 11/12/2012
+          ' get contributor details
+		If caseornon <> "non" Then 
+			Call getdetails()
+			If status <> 0 Then 
+				Close #filenum               
+				Exit Sub
+			End If
+		End If
+%END REM
+		
+          'print label/envelope(s)
+		
+		Call printcurdoc() 
+		If status <> 0 Then 
+			Close #filenum               
+			Exit Sub
+		End If
+		
+	Next
+	
+     ' send file to printer
+	
+	Print #filenum, printerreset     
+	Close #filenum    
+	Filecopy fname, printer     
+	
+End Sub
+Sub getnextdoc
+	
+     '*******************************************************************************************
+     '
+     ' retrieve document from ids list
+     '
+     ' element  to retrieve in docidno
+     '
+     '*******************************************************************************************
+	
+	status = 0
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 	
+     ' if a single document doc already in seldoc
+	
+	If dtype = "doc" Then Exit Sub
+	
+     ' get document using approriate id
+	
+	Set seldoc = db.getdocumentbyunid(ids(docidno))
+	If seldoc Is Nothing Then
+		Beep
+		status = 1
+		Msgbox "Error: Unable to access document no: " & docidno & "  ID:" & ids(docidno), 16, errorstub & errortext 
+		Exit Sub
+	End If
+	
+End Sub
+Sub getparams()
+	
+     '*************************************************************************************
+	
+     ' get label/envelope parameters from user
+	
+     '*************************************************************************************
+	Dim newdoc As NotesDocument
+	Dim i As Integer
+	Dim r As Integer
+	status = 0
+	
+	Set newdoc = db.createdocument
+	If dtype = "list" Then
+		newdoc.view = seldoc.parentview.aliases(0)
+	Else
+		newdoc.view = ""
+	End If
+	
+	newdoc.labeltype = envorlab
+	
+	If envorlab = "form" Or envorlab = "rd" Then
+		r% = ws.dialogbox("labelparam", True,True, False, False, False, False, _
+		"Set Label Parameters to be Used", newdoc)   
+	Else
+		
+		r% = ws.dialogbox("envelopeparam", True,True, False, False, False, False, _
+		"Set Envelope Parameters to be Used", newdoc)   
+	End If
+	
+	If Not r% Then
+		status = 1          
+		Exit Sub
+	End If
+	
+	runopt = newdoc.runopt(0)
+	duplicatelabels = newdoc.duplicatelabels(0)
+	labelno = newdoc.labelno(0)
+	
+	Set newdoc = Nothing
+	
+     ' set up coordinate arrays for top left label/envelope print positions
+     ' maxlabelnum = max number of labels on page -1 (-1 since array pointer being set)
+     ' labeldepth = depth of print area in inches * 600 (since printer set up as 600 dots per inch)
+     ' coordinates all set in inches * 600 (since printer set up as 600 dots per inch)
+     ' maxpointsize = maximum point size (72nds inch) for printing
+     ' system will make font smaller to fit dimensions but not any larger
+	
+	Select Case envorlab
+		
+	Case "form"
+		
+       '   maxlabelnum = 7
+        '  labeldepth = 2.5 * 600
+		maxlabelnum = 9
+		labeldepth = 2 * 600
+		maxpointsize = 9
+		
+		Redim xcoord(9)
+		Redim ycoord(9)
+		
+		For i% = 0 To 9 Step 2
+			xcoord(i%) = 0.3 * 600
+		Next
+		
+		For i% = 1 To 9 Step 2
+			xcoord(i%) = 4.3 * 600
+		Next
+		
+		For i% = 0 To 1
+      '         ycoord(i%) = 0.6 * 600
+			ycoord(i%) = 0.3 * 600
+		Next
+		
+		For i% = 2 To 3
+              ' ycoord(i%) = 3.25 * 600
+			ycoord(i%) = 2.5 * 600
+		Next
+		
+		For i% = 4 To 5
+             '  ycoord(i%) = 6 * 600
+			ycoord(i%) = 4.7 * 600
+		Next
+		
+		For i% = 6 To 7
+          '     ycoord(i%) = 8.6 * 600
+			ycoord(i%) = 6.8 * 600
+		Next
+		
+		For i% = 8 To 9
+          '     ycoord(i%) = 8.6 * 600
+			ycoord(i%) = 9.3 * 600
+		Next
+		
+	Case "rd"
+		
+		maxlabelnum = 20
+		labeldepth = 1.25 * 600
+		maxpointsize = 8
+		
+		Redim xcoord(20)
+		Redim ycoord(20)
+		
+		For i% = 0 To 20 Step 3
+			xcoord(i%) = 0.25 * 600
+		Next
+		
+		For i% = 1 To 20 Step 3
+			xcoord(i%) = 2.9 * 600
+		Next
+		
+		For i% = 2 To 20 Step 3
+			xcoord(i%) = 5.5 * 600
+		Next
+		
+		For i% = 0 To 2
+			ycoord(i%) = 0.7 * 600
+		Next
+		
+		For i% = 3 To 5
+			ycoord(i%) = 2.2 * 600
+		Next
+		
+		For i% = 6 To 8
+			ycoord(i%) = 3.7 * 600
+		Next
+		
+		For i% = 9 To 11
+			ycoord(i%) = 5.2 * 600
+		Next
+		
+		For i% = 12 To 14
+			ycoord(i%) = 6.6 * 600
+		Next
+		
+		For i% = 15 To 17
+			ycoord(i%) = 8.2 * 600
+		Next
+		
+		For i% = 18 To 20
+			ycoord(i%) = 9.6 * 600
+		Next
+		
+	Case "largeenv"
+		
+		maxlabelnum = 0
+		labeldepth = 4 * 600
+		maxpointsize = 12
+		
+		Redim xcoord(0)
+		Redim ycoord(0)
+		
+		xcoord(0) = 3 * 600
+		ycoord(0) = 1.75 * 600
+		
+	Case "smallenv"
+		
+		maxlabelnum = 0
+		labeldepth = 2 * 600
+		maxpointsize = 12
+		
+		Redim xcoord(0)
+		Redim ycoord(0)
+		
+		xcoord(0) = 2.5 * 600
+		ycoord(0) = 1.5 * 600
+		
+	Case "postfenv"
+		
+		maxlabelnum = 0
+		labeldepth = 4 * 600
+		maxpointsize = 12
+		
+		Redim xcoord(0)
+		Redim ycoord(0)
+		
+		xcoord(0) = 3 * 600
+		ycoord(0) = 1.75 * 600
+		
+	End Select
+	
+End Sub
+Sub printonedoc(envorlabparam As String)
+	
+     '******************************************************************************
+     ' 
+     ' Main Entry Point
+     '
+     ' print address for currently open case document
+    ' 
+     ' parameter envorlab
+     '
+     '    largeenv  = large envelope
+     '    smallenv  = small envelope
+     '    form         = form address label
+     '    rd             = recorded delivery label
+     '
+     '*****************************************************************************
+	
+	Set ws = New notesuiworkspace
+	Set session = New  notessession
+	Set db = session.currentdatabase
+	
+	status = 0
+	dtype = "doc"
+' Internal Notes constants that give information about the current module
+	errortext = Lcase(Lsi_info(2)) & " called by " & Lcase(Lsi_info(12)) 
+	
+	envorlab = Lcase(envorlabparam)
+	
+     ' get id of current document
+	
+	Set uidoc = ws.currentdocument
+	If uidoc Is Nothing Then
+		Beep
+		status = 1
+		Msgbox "Error: Unable to access current UI document",16,errorstub & errortext 
+		Exit Sub
+	End If
+	
+	Set seldoc = uidoc.document
+	If seldoc Is Nothing Then
+		Beep
+		status = 1
+		Msgbox "Error: Unable to access current document",16,errorstub & errortext 
+		Exit Sub
+	End If
+	
+'	If seldoc.form(0) = "livecasedetails" Then 
+	If seldoc.form(0) = "enforcement" Then     ' DJS 20/03/2012		
+		caseornon = "case"
+	Elseif seldoc.form(0) = "printletter" Then 
+		caseornon = "letter"
+	Else
+		caseornon = "non"
+	End If
+	
+    ' get  parameters
+	
+	Call getparams()
+	If status <> 0 Then Exit Sub
+	
+     ' print
+	
+	Redim ids(0)
+	
+	Call printlabels()
+	If status <> 0 Then Exit Sub
+	
+	If envorlab = "form" Or envorlab = "rd" Then
+		Msgbox "Label printed successfully", 64, " Information"
+	Else          
+		Msgbox "Envelope printed successfully", 64, " Information"
+	End If   
+	
+End Sub
