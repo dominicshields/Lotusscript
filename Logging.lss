@@ -1,0 +1,427 @@
+Option Public
+Option Declare
+Dim logsess As NotesSession
+Dim logthisdb As NotesDatabase
+Dim logdb As NotesDatabase
+Dim loglookupdb As NotesDatabase
+Dim loglookupview As NotesView
+Dim logview As NotesView
+Dim logdoc As NotesDocument
+Dim logprofiledoc As NotesDocument
+Dim loglookupdoc As NotesDocument
+Dim logdeldoc As NotesDocument
+Dim logcheckdoc As NotesDocument
+Dim logrtitem As NotesRichTextItem
+Dim logitem As NotesItem
+Dim logsn As NotesName
+Dim nnlog As NotesName
+Dim logrs As NotesRichTextStyle
+Dim logsendto As Variant
+Dim logdelete As Variant
+Dim logResult As Variant
+Dim debuglogging As String
+Dim loglocation As String
+Dim logviewname As String
+Dim logformname As String
+Dim logdeletestr As String
+Dim logdeleteinterval As String
+Dim logstokeep As Long
+Dim logwriteinterval As Integer
+Dim loggingenabled As Integer
+Dim logi As Integer
+Dim logdelflag As Integer
+Dim logdelcnt As Integer
+
+Sub Initialize
+	
+	Call initlogglobals
+	
+End Sub
+Sub Terminate
+	
+	If (Not loggingenabled) Or (logrtitem Is Nothing) Then	
+		Exit Sub
+	End If
+	
+	Call logrtitem.AddNewLine(2)	
+	Call logrtitem.AppendText(Now & "  :  " & logdoc.callingobject(0) & " End.")
+	Call logrtitem.AddNewLine(1)
+	logdoc.endtime = Now
+	logdoc.Save True,True
+	
+End Sub
+Sub logpurgeold
+	' INTERNAL LOGS VIEW MUST BE SORTED BY DESC DATE TO WORK CORRECTLY
+	' EXTERNAL LOGS NEED A CATEGORIZED VIEW
+	
+	' Observed what looks like a race condition here when many people call the same logged process at the same instant
+	' I think that the theory that fits the facts is that the docToRemove handle can  be to an object that someone else's run
+	' of the code has just deleted so an On Error Resume Next might be required for this Sub DJS 21/07/2014 
+	
+	On Error Resume Next ' DJS 23/07/2014 see above remarks
+	  
+	Dim docToRemove As NotesDocument, coll As NotesViewEntryCollection
+	Set logview = logdb.GetView(logviewname)	
+	
+	If logview Is Nothing Then
+		logaction(|Old logs not purged as view "|+logviewname+|" was not found.|)
+		Exit Sub
+	End If
+	
+	Call deletespecifiedlogs   ' GET RID OF FREQUENT LOGS SPECIFICALLY MENTIONED IN THE PROFILE OF THE CALLING APP
+	
+	If loglocation = "Internal" Then		
+		Set coll = logview.AllEntries
+	Else
+		' get a document collection of all log docs for the current calling object. 
+		' this allows us to keep the same number of logs for different calling object, rather than keeping only n logs for the whole db
+		Dim key(1) As Variant
+		key(0) = logthisdb.Title
+		key(1) = logdoc.callingobject(0)
+		Set coll = logview.GetAllEntriesByKey(key, True)
+	End If
+	
+	
+	If coll.Count > logstokeep Then Set docToRemove = coll.GetLastEntry.document
+	
+	While coll.Count > logstokeep	And (Not docToRemove Is Nothing)				
+		docToRemove.Remove True
+		logview.Refresh
+		
+		' need to get a fresh collection bc last doc removed
+		If loglocation = "Internal" Then
+			Set coll = logview.AllEntries
+		Else
+			Set coll = logview.GetAllEntriesByKey(key, True)	
+		End If
+		
+		Set docToRemove = coll.GetLastEntry.document
+	Wend
+	
+	
+	logaction(|Old logs purged.|)
+	
+End Sub
+Sub logerror(errnum As Integer, errmsg As String, errline As Integer, currentmodule As String, callingmodule As String, additionalinfo As String)
+	
+	If Not loggingenabled Then
+		Exit Sub
+	End If
+	
+	If logrtitem Is Nothing Then
+		Call initlog("Ad-Hoc Log")
+	End If
+	
+	' build an error string
+	Dim errstr As String
+	errstr = "Error in " + currentmodule 
+	
+	If currentmodule <> callingmodule Then
+		errstr = errstr + " called by " & callingmodule 
+	End If
+	
+	errstr = errstr + ". Error #" & CStr(errnum) &" on line " & CStr(errline)  & ". Error message: " & errmsg & "."
+	
+	If additionalinfo <> "" Then
+		errstr = errstr + " Additional info: " & additionalinfo 		
+	End If	
+	
+	' set text to be red to highlight the error
+	Set logrs = logsess.CreateRichTextStyle
+	logrs.NotesColor = COLOR_RED
+	Call logrtitem.AppendStyle(logrs)	
+	
+	Call logrtitem.AppendText(Now & "  :  " & errstr)
+	Call logrtitem.AddNewLine(1)
+	
+	' reset text to black font
+	Set logrs = logsess.CreateRichTextStyle
+	logrs.NotesColor = COLOR_BLACK
+	Call logrtitem.AppendStyle(logrs)	
+	
+	logdoc.errorfound = "Yes"
+	logdoc.Save True,True
+	
+End Sub
+Sub semaphore(callingobject As String)
+	
+	If (logprofiledoc.logmonitorstatus(0) = "Disabled") Then	
+		Exit Sub
+	End If	
+	
+	If(loglocation = "Internal") Then
+		Set logdb = logsess.Currentdatabase
+		Set logsn = New NotesName(logthisdb.Server)
+	Else
+		Set loglookupdoc = loglookupview.GetDocumentByKey(UCase(loglocation), True)
+		If loglookupdoc Is Nothing Then
+			Print "Error the Lookup.nsf A1 view does not contain the case-sensitive key  " & UCase(loglocation)
+			Exit Sub
+		End If
+		Set logdb = New NotesDatabase(loglookupdoc.target_server(0), loglookupdoc.path(0))
+		Set logsn = New NotesName(logdb.Server)
+	End If	
+	
+	' need to use local scope variables here in case globals for the log are still in use/need to be used
+	Dim docsemaphore As NotesDocument, delauthors As NotesItem, body As NotesRichTextItem, logkey(1) As String
+	
+	logkey(0) = logthisdb.title
+	logkey(1) = callingobject  ' THIS SHOULD MATCH THE AGENT NAME OR IDENTIFIER
+	Set logview = logdb.getview("S1")
+	Set docsemaphore =  logview.getdocumentbykey(logkey,True)
+	
+	If(docsemaphore Is Nothing) Then
+		Set docsemaphore = New NotesDocument(logdb)
+		docsemaphore.starttime = Now
+		docsemaphore.form = logformname
+		docsemaphore.semaphore = "Yes"
+		
+		docsemaphore.delauthors = "*"
+		Set delauthors = docsemaphore.GetFirstItem("delauthors")
+		delauthors.IsAuthors = True  ' The log must be able to potentially be deleted by anyone.
+		
+		docsemaphore.server = logsn.common
+		docsemaphore.database = logthisdb.Title		
+		docsemaphore.callingobject = callingobject
+		
+		Set body = New NotesRichTextItem( docsemaphore, "Body" )		
+		Call body.AppendText(Now & "  " & callingobject & " Semaphore written")
+		Call body.AddNewLine(1)	
+		
+		docsemaphore.endtime = Now
+		docsemaphore.Save True,True
+	Else
+		docsemaphore.starttime = Now
+		docsemaphore.endtime = Now
+		docsemaphore.save True,True
+	End If
+	
+End Sub
+
+Sub alerterrors(agentname As String,logstring As String)
+	
+	If Not loggingenabled Then	
+		Exit Sub
+	End If
+	
+	Dim maildoc As New NotesDocument(logthisdb)
+	Dim mailrtitem As New NotesRichTextItem( maildoc, "Body" )
+	maildoc.form = "Memo"
+	maildoc.subject = "Server : " & logsn.Common & ". Database : " & logthisdb.Title & ". Process : " & agentname 
+	Call mailrtitem.AppendText(logstring)
+	Call mailrtitem.AddNewline(1)
+	Call mailrtitem.AppendText("Link to database log ")
+	Call mailrtitem.AppendDocLink(logdoc,"Click to see log")
+	maildoc.sendto = logsendto
+	Call maildoc.send(False)
+End Sub
+Function logdoclink As NotesDocument
+' Call this if you want to include a doclink to the log document in your application's doc DJS 23/09/2014
+' calling code example
+' Call rtitem.Appenddoclink(logdoclink, "Link to Log ", "Click to see the log")
+	Set logdoclink = logdoc
+End Function
+Sub deletespecifiedlogs
+	Dim deletedate As New NotesDateTime(Now)	
+	If(logdeleteinterval = "" Or Not IsNumeric(logdeleteinterval)) Then
+		Exit Sub
+	End If
+	deletedate.adjustday(-Cint(logdeleteinterval))                   ' ADJUST TO THE NUMBER OF DAYS REQUIRED TO KEEP
+	
+	If(IsEmpty(logdelete) Or IsNull(logdelete)) Then
+		Exit Sub
+	End If
+	
+	If(logdelete(0) = "") Then
+		Print "Logdelete is null"
+		Exit Sub
+	End If
+	
+	For logi= LBound(logdelete) To UBound(logdelete)
+		logdeletestr = logdeletestr & logdelete(logi) & ","
+	Next
+	
+	Set logcheckdoc = logview.getfirstdocument
+	logdelcnt = 0
+	While Not logcheckdoc Is Nothing
+		logdelflag = 0		
+		For logi= LBound(logdelete) To UBound(logdelete)
+			If(logdelete(logi) = logcheckdoc.callingobject(0)) Then
+				Dim docdate As New NotesDateTime(logcheckdoc.starttime(0))
+				If(docdate.TimeDifference(deletedate ) < 0) Then
+					Set logdeldoc = logcheckdoc
+					logdelflag = 1
+				End If
+			End If
+		Next
+		
+		Set logcheckdoc = logview.getnextdocument(logcheckdoc)
+		If(logdelflag = 1) Then
+			logdeldoc.remove True
+			logdelcnt = logdelcnt + 1
+		End If
+	Wend
+	If(logdelcnt > 0) Then
+		logaction("As specified in the calling db profile, " & CStr(logdelcnt) & " old logs prior to " & deletedate.LocalTime & " were purged for " & logdeletestr)
+	End If
+End Sub
+Sub initlog(callingobject As String)
+	
+	If Not loggingenabled Then	
+		' re-initialize globals and retest. this was added as there are some cases in which the log profile doc is created in script AFTER this library is initialised,
+		' so need to reinit the global vars
+		initlogglobals		
+		If Not loggingenabled Then	Exit Sub
+	End If	
+	
+	If(loglocation = "Internal") Then
+		Set logdb = logsess.Currentdatabase
+		Set logdoc = New NotesDocument(logdb)
+		Set logsn = New NotesName(logthisdb.Server)
+	Else
+		Set loglookupdoc = loglookupview.GetDocumentByKey(UCase(loglocation), True)
+		If loglookupdoc Is Nothing Then
+			Print "Error, the Lookup.nsf A1 view does not contain the case-sensitive key  " & UCase(loglocation)
+			Exit Sub
+		End If
+		Set logdb = New NotesDatabase(loglookupdoc.target_server(0), loglookupdoc.path(0))
+		Set logdoc = New NotesDocument(logdb)
+		Set logsn = New NotesName(logdb.Server)
+	End If	
+	
+	logdoc.form = logformname
+	logdoc.delauthors = "*"
+	Set logitem = logdoc.GetFirstItem("delauthors")
+	logitem.IsAuthors = True  ' The log must be able to potentially be deleted by anyone.
+	
+	Set logrtitem = New NotesRichTextItem( logdoc, "Body" )
+	
+	logdoc.server = logsn.common
+	logdoc.user = nnlog.Abbreviated    ' Want to know who ran the code DJS 12/06/2012  
+	logdoc.database = logthisdb.Title
+	Dim dblinkitem As New NotesRichTextItem(logdoc,"dblink")
+	Call dblinkitem.AppendDocLink(logthisdb,"Link To database " & logthisdb.Title)
+	logdoc.callingobject = callingobject
+	logdoc.starttime = Now
+	Set logrs = logsess.CreateRichTextStyle
+	logrs.FontSize = 8
+	Call logrtitem.AppendStyle(logrs)	
+	Call logrtitem.AppendText(Now & "  :  " & callingobject & " Starts")
+	Call logrtitem.AddNewLine(1)	
+	logdoc.Save True,True
+	
+' IF LOGGING INTERNAL TEST THAT THE CALLING USER ID HAS DELETE PERMISSION TO THE CURRENT DATABASE DJS 24/1/2013
+	If(loglocation <> "Internal") Then    ' EXTERNAL IS FINE
+		logpurgeold
+	Else
+		Dim logdeldoc As New NotesDocument(logthisdb)
+		logdeldoc.server = logthisdb.Server
+		logdeldoc.path = logthisdb.FilePath
+		logResult=Evaluate("@UserAccess(server:path;[DELETEDOCUMENTS])",logdeldoc)    ' THERE APPEARS TO BE NO LOTUSSCRIPT EQUIVALENT
+		If IsEmpty(logResult) Then    ' IF THIS IS CALLED FROM A SCHEDULED AGENT EVALUATE WILL RETURN EMPTY DJS 06/02/2013
+			logpurgeold     ' SERVER WILL HAVE DELETE ACCESS
+		Else
+			If(logResult(0) = "1") Then      ' USER HAS DELETE ACCESS TO CURRENT DB
+				logpurgeold
+			End If			
+		End If		
+	End If
+	
+	Call logrtitem.AddNewLine(1)
+	
+End Sub
+Sub logclose(logstring As String)
+	
+	If Not loggingenabled Then	
+		Exit Sub
+	End If
+	
+	Call logrtitem.AddNewLine(2)	
+	Call logrtitem.AppendText(Now & "  :  " & logstring)
+	Call logrtitem.AddNewLine(1)	
+	logdoc.endtime = Now
+	logdoc.Save True,True
+End Sub
+Sub logaction(logstring As String)
+	
+	If Not loggingenabled Then
+		Exit Sub
+	End If
+	
+	If logrtitem Is Nothing Then
+		Call initlog("Ad-Hoc Log")
+	End If
+	
+	Static callcount As Long
+	Call logrtitem.AppendText(Now & "  :  " & logstring)
+	Call logrtitem.AddNewLine(1)
+	callcount = callcount + 1
+	If( callcount Mod logwriteinterval = 0) Then   ' Only save the back-end doc at the interval specified for performance reasons
+		logdoc.Save True,True
+	End If
+	
+End Sub
+Sub logactionwithlink(logstring As String, doc As NotesDocument)
+	
+	If Not loggingenabled Then
+		Exit Sub
+	End If
+	
+	If logrtitem Is Nothing Then
+		Call initlog("Ad-Hoc Log")
+	End If
+	
+	Static callcount As Long
+	Call logrtitem.AppendText(Now & "  :  " & logstring & " ")	' add space before the doclink
+	Call logrtitem.AppendDocLink(doc, "Doc link for this action")
+	Call logrtitem.AddNewLine(1)
+	callcount = callcount + 1
+	
+	If( callcount Mod logwriteinterval = 0) Then   ' Only save the back-end doc at the interval specified for performance reasons
+		logdoc.Save True,True
+	End If
+	
+End Sub
+Private Sub initlogglobals
+	' first check if initialization is needed by checking log profile 
+	Set logsess = New NotesSession
+	Set logthisdb = logsess.currentdatabase	
+	Set logprofiledoc = logthisdb.getprofiledocument("logprofile")
+	Set nnlog = New NotesName(logsess.UserName)    ' Want to know who ran the code DJS 12/06/2012  
+	
+' check if the profile doc has actually been created and populated with data
+' The original code simply exited reporting logging not enabled if no log profile, it is more useful I decided 
+' if in this case a default log profile is created so the code can continue and is self-initialising DJS 14/07/2014
+	If Not logprofiledoc.HasItem("loggingstatus") Then
+		' Original code changed DJS 14/07/2014		loggingenabled = False
+		' Original code changed DJS 14/07/2014     Exit Sub
+		logprofiledoc.form = "logprofile"                                   'DJS 14/07/2014
+		logprofiledoc.loggingstatus = "Enabled"                    'DJS 14/07/2014
+		logprofiledoc.loglocation = "CENTRALLOG"                'DJS 14/07/2014
+		logprofiledoc.logviewname = "logsbydb"                'DJS 14/07/2014
+		logprofiledoc.logstokeep = 100                'DJS 14/07/2014
+		logprofiledoc.logwriteinterval = "10"                'DJS 14/07/2014
+		logprofiledoc.logformname = "internallog"                'DJS 14/07/2014
+		Call logprofiledoc.Save(True, False)                'DJS 14/07/2014
+	End If	
+	
+	Set loglookupdb = New NotesDatabase( logthisdb.server, "lookup.nsf" )                                   ' Added test for local lookup.nsf  DJS V015 23/07/2015
+	If (logprofiledoc.loggingstatus(0) = "Enabled" And loglookupdb.title <> "") Then	               ' Added test for local lookup.nsf  DJS V015 23/07/2015		
+		loggingenabled = True
+	Else
+		loggingenabled = False
+		Exit Sub
+	End If	
+	
+	loglocation = logprofiledoc.loglocation(0)
+	logviewname = logprofiledoc.logviewname(0)
+	logformname = logprofiledoc.logformname(0)
+	logwriteinterval = CInt(logprofiledoc.logwriteinterval(0))
+	logstokeep = logprofiledoc.logstokeep(0)
+	logsendto = logprofiledoc.sendto
+	logdeleteinterval = logprofiledoc.logdeleteinterval(0)
+	logdelete = logprofiledoc.logdelete
+	
+	Set loglookupview = loglookupdb.GetView("A1")
+	
+End Sub
